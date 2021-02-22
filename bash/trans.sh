@@ -2,7 +2,7 @@
 #
 # trans.sh - Translate words using linguee.com.
 #
-# (C) Bruno Raoult, 2021
+# (C) Bruno Raoult ("br"), 2021
 # Licensed under the Mozilla Public License (MPL) version 2.0.
 # Some rights reserved. See COPYING.
 #
