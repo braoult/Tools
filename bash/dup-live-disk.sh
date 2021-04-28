@@ -20,7 +20,7 @@
 #
 # DESCRIPTION
 #       Duplicate SRC disk partitions to same structured DST disk ones.
-#       if SRC is omitted, tue running system disk (where root partition
+#       if SRC is omitted, the running system disk (where root partition
 #       resides) will be used.
 #       Both SRC and DST *must* have same partition base LABELs - as 'LABEL'
 #       field for lsblk(1) and blkid(1), with an ending character (unique per
@@ -31,8 +31,17 @@
 #       must be 'root2', 'export2, and 'swap2'.
 #
 # OPTIONS
-#       -d, -n, --dry-run, --no
-#          Dry-run: nothing will be written to disk.
+#       -a, --autofs=DIR
+#          Use DIR as autofs "LABEL-based" automount. See AUTOFS below. Default
+#          is /mnt.
+#
+#       -c, --copy=ACTION
+#          ACTION can be 'yes' (all eligible partitions will be copied), 'no'
+#          (no partition will be copied), or 'ask' (will ask for all eligible
+#          partitions). Default is 'no'.
+#
+#       -d, --dry-run
+#          Dry-run: nothing will be really be done.
 #
 #       -g, --grub
 #          Install grub on destination disk.
@@ -51,10 +60,6 @@
 #       -r, --root=PARTNUM
 #          Mandatory if SRC is provided, forbidden otherwise.
 #          PARTNUM is root partition number on SRC disk.
-#
-#       -y, --yes
-#          Do not ask for actions confirmation. Default is to display next
-#          action and ask user to [y] do it, [q] quit, [s] skip.
 #
 # EXAMPLES
 #       Copy sda to sdb, root partition is partition (sda1/sdb1)
@@ -92,16 +97,17 @@ Usage: $CMD [OPTIONS] [SRC] DST
 Duplicate SRC (or live system) disk partitions to DST disk partitions.
 
 Options:
-      -d, -n, --dry-run, --no  dry-run: nothing will be written to disk
-      -g, --grub               install grub on destination disk
-      -h, --help               this help
-      -m, --man                display a "man-like" page and exit
-      --mariadb                stop and restart mysql/mariadb server before and
-                               after copies
-      -r, --root=PARTNUM       root partition number on SRC device
-                               mandatory if and only if SRC is provided
-      -y, --yes                DANGER ! perform all actions without user
-                               confirmation
+      -a, --autofs=DIR     autofs "LABEL-based" directory. Default is '/mnt'.
+      -c, --copy=ACTION    do partitions copies ('yes'), do not copy then ('no')
+                           or ask for each of them ('ask'). Default is 'no'.
+      -d, --dry-run        dry-run: nothing will be written to disk
+      -g, --grub           install grub on destination disk
+      -h, --help           this help
+      -m, --man            display a "man-like" page and exit
+      --mariadb            stop and restart mysql/mariadb server before and
+                           after copies
+      -r, --root=PARTNUM   root partition number on SRC device
+                           mandatory if and only if SRC is provided
 
 SRC and DST have strong constraints on partitions schemes and naming.
 Type '$CMD --man" for more details"
@@ -112,19 +118,19 @@ _EOF
 # mariadb start/stop
 function mariadb_maybe_stop {
     if [[ $MARIADB == yes ]] && systemctl is-active --quiet mysql; then
-        log -n "stopping mariadb/mysql... "
-        systemctl stop mariadb
+        #log -n "stopping mariadb/mysql... "
+        echorun systemctl stop mariadb
         # bug if script stops here
         MARIADBSTOPPED=yes
-        log "done."
+        #log "done."
     fi
 }
 function mariadb_maybe_start {
     if [[ $MARIADB == yes && $MARIADBSTOPPED == yes ]]; then
-        log -n "restarting mariadb/mysql... "
-        systemctl start mariadb
+        #log -n "restarting mariadb/mysql... "
+        echorun systemctl start mariadb
         MARIADBSTOPPED=no
-        log "done."
+        #log "done."
     fi
 }
 
@@ -155,9 +161,12 @@ function log {
 
 # prints out and run a command.
 function echorun {
-    log "%s" "$@"
-    "$@"
-    return $?
+    if [[ "$DRYRUN" == 'yes' ]]; then
+        log "%s " "dry-run: " "$@"
+    else
+        log "%s " "$@"
+        "$@"
+    fi
 }
 
 function error_handler {
@@ -168,15 +177,19 @@ function error_handler {
 trap 'error_handler $LINENO $?' ERR SIGHUP SIGINT SIGTERM
 
 function exit_handler {
+    local mnt
+
     log "exit handler (at line $1)"
     mariadb_maybe_start
-    if [[ -v DSTMNT ]]; then
-        umount "$DSTMNT/dev"
-        umount "$DSTMNT/proc"
-        umount "$DSTMNT/sys"
+    if [[ -n "$DSTMNT" ]] && mountpoint -q "$DSTMNT"; then
+        for mnt in "$DSTMNT"/{dev,proc,sys}; do
+            if mountpoint -q "$mnt"; then
+                echorun umount "$mnt"
+            fi
+        done
     fi
-
 }
+
 trap 'exit_handler $LINENO' EXIT
 
 function check_block_device {
@@ -237,14 +250,16 @@ SRC=""
 DST=""
 SRCROOT=""
 ROOTPARTNUM=""
-DOIT=manual
-MARIADB=no
-MARIADBSTOPPED=no
-GRUBINSTALL=no
+
+DRYRUN=no                                         # dry-run
+GRUB=no                                           # install grub
+COPY=no                                           # do FS copies
+MARIADB=no                                        # stop/start mysql/mariadb
+MARIADBSTOPPED=no                                 # mysql stopped ?
 
 # short and long options
-SOPTS="dnghmr:y"
-LOPTS="dry-run,no,grub,help,man,mariadb,root:,yes"
+SOPTS="c:dghmr:"
+LOPTS="copy:,dry-run,grub,help,man,mariadb,root:"
 
 if ! TMP=$(getopt -o "$SOPTS" -l "$LOPTS" -n "$CMD" -- "$@"); then
     log "Use '$CMD --help' or '$CMD --man' for help."
@@ -256,14 +271,22 @@ unset TMP
 
 while true; do
     case "$1" in
-        '-d'|'-n'|'--dry-run'|'--no')
-            DOIT=no
+        '-c'|'--copy')
+            case "$2" in
+                "no") COPY=no;;
+                "yes") COPY=yes;;
+                "ask") COPY=ask;;
+                *) log "invalid '$2' --copy flag"
+                   usage
+                   exit 1
+            esac
             shift
-            continue
+            ;;
+        '-d'|'--dry-run')
+            DRYRUN=yes
             ;;
         '-g'|'--grub')
-            GRUBINSTALL=yes
-            shift
+            GRUB=yes
             ;;
         '-h'|'--help')
             usage
@@ -275,7 +298,6 @@ while true; do
             ;;
         '--mariadb')
             MARIADB=yes
-            shift
             ;;
         '-r'|'--root')
             ROOTPARTNUM="$2"
@@ -283,13 +305,7 @@ while true; do
                 log "$CMD: $ROOTPARTNUM must be a partition number."
                 exit 1
             fi
-            shift 2
-            continue
-            ;;
-        '-y'|'--yes')
-            DOIT=yes
             shift
-            continue
             ;;
         '--')
             shift
@@ -301,8 +317,8 @@ while true; do
             exit 1
             ;;
     esac
+    shift
 done
-
 
 case "$#" in
     1)
@@ -355,7 +371,7 @@ declare -a LABELS=(${SRCLABELS[@]%?})
 #log "LABELS=${#LABELS[@]} - ${LABELS[*]}"
 
 
-declare -a SRCDEVS SRCFS SRCDOIT
+declare -a SRCDEVS SRCFS SRC_VALID_FS
 # ... and corresponding partition device and fstype
 for ((i=0; i<${#LABELS[@]}; ++i)); do
     TMP="${LABELS[$i]}$SRCCHAR"
@@ -365,8 +381,8 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
     log "found LABEL=$TMP DEV=$TMPDEV FSTYPE=$TMPFS"
     SRCDEVS[$i]="$TMPDEV"
     SRCFS[$i]="$TMPFS"
-    SRCDOIT[$i]=n
-    in_array "$TMPFS" VALIDFS && SRCDOIT[$i]=y
+    SRC_VALID_FS[$i]=n
+    in_array "$TMPFS" VALIDFS && SRC_VALID_FS[$i]=y
     unset TMP TMPDEV TMPFS
 done
 
@@ -386,9 +402,8 @@ fi
 # log "ROOTLABEL=$ROOTLABEL"
 # log "SRCROOTLABEL=%s DSTROOTLABEL=%s" "$SRCROOTLABEL" "$DSTROOTLABEL"
 # log "SRCCHAR=%s DSTCHAR=%s" "$SRCCHAR" "$DSTCHAR"
-# log "DOIT=%s\n" "$DOIT"
 
-declare -a DSTLABELS DSTDEVS DSTFS DSTDOIT
+declare -a DSTLABELS DSTDEVS DSTFS DST_VALID_FS
 # Do the same for correponding DST partitions labels, device, and fstype
 for ((i=0; i<${#LABELS[@]}; ++i)); do
     TMP="${LABELS[$i]}$DSTCHAR"
@@ -408,8 +423,8 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
     DSTLABELS[$i]="$TMP"
     DSTDEVS[$i]="$TMPDEV"
     DSTFS[$i]="$TMPFS"
-    DSTDOIT[$i]=n
-    in_array "$TMPFS" VALIDFS && DSTDOIT[$i]=y
+    DST_VALID_FS[$i]=n
+    in_array "$TMPFS" VALIDFS && DST_VALID_FS[$i]=y
     unset TMP TMPDEV TMPFS
 done
 
@@ -417,56 +432,47 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
     log -n "%s %s " "${SRCDEVS[$i]}" "${DSTDEVS[$i]}"
     log -n "%s %s " "${SRCLABELS[$i]}" "${DSTLABELS[$i]}"
     log -n "%s %s "  "${SRCFS[$i]}" "${DSTFS[$i]}"
-    log -n "%s %s "  "${SRCDOIT[$i]}" "${DSTDOIT[$i]}"
+    log -n "%s %s "  "${SRC_VALID_FS[$i]}" "${DST_VALID_FS[$i]}"
     [[ "$DSTROOTLABEL" == "${DSTLABELS[$i]}" ]] && log "*"
     echo
-done | column -N DEV1,DEV2,LABEL1,LABEL2,FS1,FS2,SDOIT,DDOIT,ROOT -t -o " | "
+done | column -N DEV1,DEV2,LABEL1,LABEL2,FS1,FS2,SVALID\?,DVALID\?,ROOT -t -o " | "
 
 RSYNCOPTS="-axH --delete --delete-excluded"
 FILTER=--filter="dir-merge .rsync-disk-copy"
 # copy loop
 for ((i=0; i<${#LABELS[@]}; ++i)); do
-    if [[ "${SRCDOIT[$i]}" != y ]] || [[ "${DSTDOIT[$i]}" != y ]]; then
+    if [[ "${SRC_VALID_FS[$i]}" != y ]] || [[ "${DST_VALID_FS[$i]}" != y ]]; then
         log "skipping label %s" "${LABELS[$i]}"
         continue
     fi
     SRCPART=/mnt/${SRCLABELS[$i]}/
     DSTPART=/mnt/${DSTLABELS[$i]}
 
-    log -n "%s -> %s : " "$SRCPART" "$DSTPART"
+    #log -n "%s -> %s : " "$SRCPART" "$DSTPART"
     #log "\t%s %s %s %s %s" rsync "${RSYNCOPTS}" "$FILTER" "$SRCPART" "$DSTPART"
-    skip=y
-    case "$DOIT" in
-        yes)
-            skip=n
-            ;;
-        no)
-            log "skipping (dry run)."
-            ;;
-        manual)
-            yesno "proceed ? [y/n/q]" && skip=n
-            ;;
-    esac
-    if [[ "$skip" == n ]]; then
-        # shellcheck disable=SC2086
+    copy="$COPY"
+    if [[ "$COPY" == 'ask' ]]; then
+        yesno "Copy $SRCPART to $DSTPART ? [y/n/q]" && copy=yes || copy=no
+    fi
+    if [[ "$copy" == yes ]]; then
         mariadb_maybe_stop
+        # shellcheck disable=SC2086
         echorun rsync "$FILTER" ${RSYNCOPTS} "$SRCPART" "$DSTPART"
     fi
-    log ""
+    #log ""
 done
 
 # grub install
-# mount virtual devices
-if [[ $GRUBINSTALL == yes ]]; then
+if [[ "$GRUB" == yes ]]; then
     log "installing grub on $DST..."
     DSTMNT="/mnt/$DSTROOTLABEL"
-    mount -o bind /sys  "$DSTMNT/sys"
-    mount -o bind /proc "$DSTMNT/proc"
-    mount -o bind /dev  "$DSTMNT/dev"
+    # mount virtual devices
+    echorun mount -o bind /sys  "$DSTMNT/sys"
+    echorun mount -o bind /proc "$DSTMNT/proc"
+    echorun mount -o bind /dev  "$DSTMNT/dev"
 
-    chroot "$DSTMNT" update-grub
-    chroot "$DSTMNT" grub-install "$DST"
-
+    echorun chroot "$DSTMNT" update-grub
+    echorun chroot "$DSTMNT" grub-install "$DST"
 fi
 
 exit 0
