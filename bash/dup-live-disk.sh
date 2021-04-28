@@ -20,25 +20,33 @@
 #
 # DESCRIPTION
 #       Duplicate SRC disk partitions to same structured DST disk ones.
-#       if SRC is omitted, tue running system disk (where root partition resides) will
-#       be used.
-#       Both SRC and DST *must* have same partition base LABELs - as 'LABEL' field for
-#       lsblk(1) and blkid(1), with an ending character (unique per disk) to
-#       differentiate them.
+#       if SRC is omitted, tue running system disk (where root partition
+#       resides) will be used.
+#       Both SRC and DST *must* have same partition base LABELs - as 'LABEL'
+#       field for lsblk(1) and blkid(1), with an ending character (unique per
+#       disk) to differentiate them.
 #       For example, if partitions base labels are 'root', 'export', and 'swap',
 #       SRC disk the ending character '1' and DST disk the character '2', SRC
-#       partitions must be 'root1', 'export1, and 'swap1', and DST partitions must be
-#       'root2', 'export2, and 'swap2'.
+#       partitions must be 'root1', 'export1, and 'swap1', and DST partitions
+#       must be 'root2', 'export2, and 'swap2'.
 #
 # OPTIONS
 #       -d, -n, --dry-run, --no
 #          Dry-run: nothing will be written to disk.
+#
+#       -g, --grub
+#          Install grub on destination disk.
+#          Warning: Only works if root partition contains all necessary for
+#          grub: /boot, /usr, etc...
 #
 #       -h, --help
 #          Display short help and exit.
 #
 #       -m, --man
 #          Display a "man-like" description and exit.
+#
+#       --mariadb
+#          Stop mysql/mariadb before effective copies, restart after.
 #
 #       -r, --root=PARTNUM
 #          Mandatory if SRC is provided, forbidden otherwise.
@@ -61,16 +69,18 @@
 #       don't use it if you don't *fully* understand it.
 #
 # TODO
-#       Write about autofs.
+#       Write about autofs configuration.
+#       Log levels
+#       Separate dry-run and copies/mysql/grub
 #%MAN_END%
 
 # command line
-SCRIPT="${0}"
+SCRIPT="$0"
 CMD="${0##*/}"
 
 # valid filesystems
 # shellcheck disable=2034
-VALIDFS=(ext3 ext4 btrfs vfat reiserfs)
+VALIDFS=(ext3 ext4 btrfs vfat reiserfs xfs zfs)
 
 function man {
     sed -n '/^#%MAN_BEGIN%/,/^#%MAN_END%$/{//!p}'  "$SCRIPT" | sed -E 's/^# ?//'
@@ -83,8 +93,11 @@ Duplicate SRC (or live system) disk partitions to DST disk partitions.
 
 Options:
       -d, -n, --dry-run, --no  dry-run: nothing will be written to disk
+      -g, --grub               install grub on destination disk
       -h, --help               this help
       -m, --man                display a "man-like" page and exit
+      --mariadb                stop and restart mysql/mariadb server before and
+                               after copies
       -r, --root=PARTNUM       root partition number on SRC device
                                mandatory if and only if SRC is provided
       -y, --yes                DANGER ! perform all actions without user
@@ -94,6 +107,25 @@ SRC and DST have strong constraints on partitions schemes and naming.
 Type '$CMD --man" for more details"
 _EOF
     exit 0
+}
+
+# mariadb start/stop
+function mariadb_maybe_stop {
+    if [[ $MARIADB == yes ]] && systemctl is-active --quiet mysql; then
+        log -n "stopping mariadb/mysql... "
+        systemctl stop mariadb
+        # bug if script stops here
+        MARIADBSTOPPED=yes
+        log "done."
+    fi
+}
+function mariadb_maybe_start {
+    if [[ $MARIADB == yes && $MARIADBSTOPPED == yes ]]; then
+        log -n "restarting mariadb/mysql... "
+        systemctl start mariadb
+        MARIADBSTOPPED=no
+        log "done."
+    fi
 }
 
 # log function
@@ -115,6 +147,7 @@ function log {
     done
     [[ $prefix != "" ]] && printf "%s " "$prefix"
     printf "%s" "$timestr"
+    # shellcheck disable=SC2059
     printf "$@"
     [[ $newline = y ]] && printf "\n"
     return 0
@@ -134,21 +167,33 @@ function error_handler {
 }
 trap 'error_handler $LINENO $?' ERR SIGHUP SIGINT SIGTERM
 
+function exit_handler {
+    log "exit handler (at line $1)"
+    mariadb_maybe_start
+    if [[ -v DSTMNT ]]; then
+        umount "$DSTMNT/dev"
+        umount "$DSTMNT/proc"
+        umount "$DSTMNT/sys"
+    fi
+
+}
+trap 'exit_handler $LINENO' EXIT
+
 function check_block_device {
     local devtype="$1"
     local mode="$2"
     local dev="$3"
 
     if [[ ! -b "$dev" ]]; then
-        log "$CMD: $devtype '$dev' is not a block device." >&2
+        log "$CMD: $devtype '$dev' is not a block device."
         exit 1
     fi
     if [[ ! -r "$dev" ]]; then
-        log "$CMD: $devtype '$dev' is not readable." >&2
+        log "$CMD: $devtype '$dev' is not readable."
         exit 1
     fi
     if [[ $mode = "w" && ! -w "$dev" ]]; then
-        log "$CMD: $devtype '$dev' is not writable." >&2
+        log "$CMD: $devtype '$dev' is not writable."
         exit 1
     fi
     return 0
@@ -164,25 +209,47 @@ function in_array {
     return 1
 }
 
+# get y/n/q user input
+function yesno {
+    local input
+    while true; do
+        printf "%s " "$1"
+        read -r input
+        case "$input" in
+            y|Y)
+                return 0
+                ;;
+            q|Q)
+                log "aborting..."
+                exit 0
+                ;;
+            n|N)
+                return 1
+                ;;
+            *)
+                printf "invalid answer. "
+        esac
+    done
+}
+
 # source and destination devices, root partition
 SRC=""
 DST=""
 SRCROOT=""
 ROOTPARTNUM=""
 DOIT=manual
+MARIADB=no
+MARIADBSTOPPED=no
+GRUBINSTALL=no
 
 # short and long options
-SOPTS="dnhmr:y"
-LOPTS="dry-run,no,help,man,root:,yes"
+SOPTS="dnghmr:y"
+LOPTS="dry-run,no,grub,help,man,mariadb,root:,yes"
 
 if ! TMP=$(getopt -o "$SOPTS" -l "$LOPTS" -n "$CMD" -- "$@"); then
     log "Use '$CMD --help' or '$CMD --man' for help."
     exit 1
 fi
-# if (( $? > 1 )); then
-#   echo 'Terminating...' >&2
-#   exit 1
-# fi
 
 eval set -- "$TMP"
 unset TMP
@@ -194,6 +261,10 @@ while true; do
             shift
             continue
             ;;
+        '-g'|'--grub')
+            GRUBINSTALL=yes
+            shift
+            ;;
         '-h'|'--help')
             usage
             exit 0
@@ -202,10 +273,14 @@ while true; do
             man
             exit 0
             ;;
+        '--mariadb')
+            MARIADB=yes
+            shift
+            ;;
         '-r'|'--root')
             ROOTPARTNUM="$2"
             if ! [[ "$ROOTPARTNUM" =~ ^[[:digit:]]+$ ]]; then
-                log "$CMD: $ROOTPARTNUM must be a partition number." >&2
+                log "$CMD: $ROOTPARTNUM must be a partition number."
                 exit 1
             fi
             shift 2
@@ -222,7 +297,7 @@ while true; do
             ;;
         *)
             usage
-            log 'Internal error!' >&2
+            log 'Internal error!'
             exit 1
             ;;
     esac
@@ -232,8 +307,8 @@ done
 case "$#" in
     1)
         if [[ -n "$ROOTPARTNUM" ]]; then
-            log "$CMD: cannot have --root option for live system." >&2
-            log "Use '$CMD --help' or '$CMD --man' for help." >&2
+            log "$CMD: cannot have --root option for live system."
+            log "Use '$CMD --help' or '$CMD --man' for help."
             exit 1
         fi
         # guess root partition disk name
@@ -244,8 +319,8 @@ case "$#" in
         ;;
     2)
         if [[ -z "$ROOTPARTNUM" ]]; then
-            log "$CMD: missing --root option for non live system." >&2
-            log "Use '$CMD --help' or '$CMD --man' for help." >&2
+            log "$CMD: missing --root option for non live system."
+            log "Use '$CMD --help' or '$CMD --man' for help."
             exit 1
         fi
         SRC="/dev/$1"
@@ -253,7 +328,7 @@ case "$#" in
         DST="/dev/$2"
         ;;
     *)
-        usage >&2
+        usage
         exit 1
 esac
 
@@ -294,7 +369,6 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
     in_array "$TMPFS" VALIDFS && SRCDOIT[$i]=y
     unset TMP TMPDEV TMPFS
 done
-
 
 DSTROOT="$DST$ROOTPARTNUM"
 check_block_device "destination root partition" w "$DSTROOT"
@@ -338,14 +412,15 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
     in_array "$TMPFS" VALIDFS && DSTDOIT[$i]=y
     unset TMP TMPDEV TMPFS
 done
-echo ZOB "${SRCDEVS[0]}" "${DSTDEVS[0]}"
+
 for ((i=0; i<${#LABELS[@]}; ++i)); do
     log -n "%s %s " "${SRCDEVS[$i]}" "${DSTDEVS[$i]}"
     log -n "%s %s " "${SRCLABELS[$i]}" "${DSTLABELS[$i]}"
     log -n "%s %s "  "${SRCFS[$i]}" "${DSTFS[$i]}"
-    log "%s %s"  "${SRCDOIT[$i]}" "${DSTDOIT[$i]}"
+    log -n "%s %s "  "${SRCDOIT[$i]}" "${DSTDOIT[$i]}"
+    [[ "$DSTROOTLABEL" == "${DSTLABELS[$i]}" ]] && log "*"
     echo
-done | column -N DEV1,DEV2,LABEL1,LABEL2,FS1,FS2,SDOIT,DDOIT -t -o " | "
+done | column -N DEV1,DEV2,LABEL1,LABEL2,FS1,FS2,SDOIT,DDOIT,ROOT -t -o " | "
 
 RSYNCOPTS="-axH --delete --delete-excluded"
 FILTER=--filter="dir-merge .rsync-disk-copy"
@@ -369,104 +444,29 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
             log "skipping (dry run)."
             ;;
         manual)
-            log -n "proceed ? [y/N/q] "
-            read -r key
-            case "$key" in
-                y|Y)
-                    log "copying..."
-                    skip=n
-                    ;;
-                q|Q)
-                    log "aborting..."
-                    exit 0
-                    ;;
-                n|N|*)
-                    log "skipping..."
-                    ;;
-            esac
+            yesno "proceed ? [y/n/q]" && skip=n
+            ;;
     esac
     if [[ "$skip" == n ]]; then
         # shellcheck disable=SC2086
+        mariadb_maybe_stop
         echorun rsync "$FILTER" ${RSYNCOPTS} "$SRCPART" "$DSTPART"
     fi
     log ""
 done
 
-
-exit 0
-# array of partitions to copy
-TO_COPY=(root export EFI)
-
-# An alternative to SRCNUM, DSTNUM, and TO_COPY variables would be to have
-# an array containing src and destination partitions:
-#   (partsrc1 partdst1 partsrc2 partdst2 etc...)
-# example:
-# TO_COPY=(root2 root1 export2 export1)
-# declare -i i
-# for ((i=0; i<${#TO_COPY[@]}; i+=2)); do
-#     SRC=${#TO_COPY[$i]}
-#     DST=${#TO_COPY[$i + 1]}
-# etc...
-
-# where we will configure/install grub: mount point, device
-GRUB_ROOT=/mnt/root${DSTNUM}
-GRUB_DEV=/dev/$(lsblk -no pkname /dev/disk/by-label/root${DSTNUM})
-
-# we will use ".rsync-disk-copy" files to exclude files/dirs
-
-# stop what could be problematic (databases, etc...)
-systemctl stop mysql
-
-# partitions copy
-for part in ${TO_COPY[@]}; do
-    SRCPART=/mnt/${part}${SRCNUM}/
-    DSTPART=/mnt/${part}${DSTNUM}
-
-    echo copy from $SRCPART to $DSTPART
-    echo -n "press a key to continue..."
-    read -r key
-    echo rsync ${RSYNCOPTS} "$FILTER" "$SRCPART" "$DSTPART"
-    rsync ${RSYNCOPTS} "$FILTER" "$SRCPART" "$DSTPART"
-done
-
 # grub install
 # mount virtual devices
-mount -o bind  /sys    ${GRUB_ROOT}/sys
-mount -o bind  /proc   ${GRUB_ROOT}/proc
-mount -o bind  /dev    ${GRUB_ROOT}/dev
+if [[ $GRUBINSTALL == yes ]]; then
+    log "installing grub on $DST..."
+    DSTMNT="/mnt/$DSTROOTLABEL"
+    mount -o bind /sys  "$DSTMNT/sys"
+    mount -o bind /proc "$DSTMNT/proc"
+    mount -o bind /dev  "$DSTMNT/dev"
 
-chroot ${GRUB_ROOT} update-grub
-chroot ${GRUB_ROOT} grub-install ${GRUB_DEV}
+    chroot "$DSTMNT" update-grub
+    chroot "$DSTMNT" grub-install "$DST"
 
-# restart stopped process (db, etc...)
-systemctl start mysql
-
-exit 0
-###############declare -a DSTLABELS_CHECK=(${SRCLABELS[@]/%?/$DSTCHAR})
-
-# find corresponding LABELS on DEST disk
-# declare -a LABELS=(${SRCLABELS[@]/%?/})
-# for ((i=0; i<${#SRCLABELS[@]}; ++i)); do
-#     TMP="${LABELS[$i]}$DSTCHAR"
-#     echo -n "looking for partition 'LABEL=$TMP'... "
-#     if ! DSTFS=$(findfs LABEL="$TMP"); then
-#         echo "not found."
-#         exit 1
-#     fi
-#     echo "$DSTFS"
-#     DSTLABELS[$i]="$TMP"
-
-# done
-
-# #DSTLABELS=($(lsblk -lno  LABEL "$DST"))
-# # check all partitions types
-# for ((i=0; i<${#SRCLABELS[@]}; ++1)); do
-#     check_block_device "source ${LABELS[$i]} partition" r "${SRCLABELS[$i]}"
-#     #check_block_device "destination ${LABELS[$i]} partition" w "${DSTLABELS[$i]}"
-
-# done
-
-# echo "DSTLABELS=${#DSTLABELS[@]} - ${DSTLABELS[*]}"
-
+fi
 
 exit 0
