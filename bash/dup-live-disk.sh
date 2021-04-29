@@ -76,7 +76,7 @@
 # TODO
 #       Write about autofs configuration.
 #       Log levels
-#       Separate dry-run and copies/mysql/grub
+#       Check existence of fstab for new disk and install it
 #%MAN_END%
 
 # command line
@@ -250,6 +250,7 @@ SRC=""
 DST=""
 SRCROOT=""
 ROOTPARTNUM=""
+AUTOFS_DIR=/mnt
 
 DRYRUN=no                                         # dry-run
 GRUB=no                                           # install grub
@@ -258,8 +259,8 @@ MARIADB=no                                        # stop/start mysql/mariadb
 MARIADBSTOPPED=no                                 # mysql stopped ?
 
 # short and long options
-SOPTS="c:dghmr:"
-LOPTS="copy:,dry-run,grub,help,man,mariadb,root:"
+SOPTS="a:c:dghmr:"
+LOPTS="autofs:,copy:,dry-run,grub,help,man,mariadb,root:"
 
 if ! TMP=$(getopt -o "$SOPTS" -l "$LOPTS" -n "$CMD" -- "$@"); then
     log "Use '$CMD --help' or '$CMD --man' for help."
@@ -271,6 +272,10 @@ unset TMP
 
 while true; do
     case "$1" in
+        '-a'|'--autofs')
+            AUTOFS_DIR="$2"
+            shift
+            ;;
         '-c'|'--copy')
             case "$2" in
                 "no") COPY=no;;
@@ -361,18 +366,15 @@ check_block_device "source root partition" r "$SRCROOT"
 SRCROOTLABEL=$(lsblk -no label "$SRCROOT")
 SRCCHAR=${SRCROOTLABEL: -1}
 ROOTLABEL=${SRCROOTLABEL:0:-1}
+
 # find out all partitions labels on SRC disk...
 # shellcheck disable=SC2207
 declare -a SRCLABELS=($(lsblk -lno  LABEL "$SRC"))
 # shellcheck disable=SC2206
 declare -a LABELS=(${SRCLABELS[@]%?})
 
-#log "SRCLABELS=${#SRCLABELS[@]} - ${SRCLABELS[*]}"
-#log "LABELS=${#LABELS[@]} - ${LABELS[*]}"
-
-
-declare -a SRCDEVS SRCFS SRC_VALID_FS
 # ... and corresponding partition device and fstype
+declare -a SRCDEVS SRCFS SRC_VALID_FS
 for ((i=0; i<${#LABELS[@]}; ++i)); do
     TMP="${LABELS[$i]}$SRCCHAR"
     TMP="${SRCLABELS[$i]}"
@@ -397,14 +399,8 @@ if [[ "$DSTROOTLABEL" != "$ROOTLABEL$DSTCHAR" ]]; then
     exit 1
 fi
 
-# log "SRC=%s DST=%s" "$SRC" "$DST"
-# log "SRCROOT=%s DSTROOT=%s" "$SRCROOT" "$DSTROOT"
-# log "ROOTLABEL=$ROOTLABEL"
-# log "SRCROOTLABEL=%s DSTROOTLABEL=%s" "$SRCROOTLABEL" "$DSTROOTLABEL"
-# log "SRCCHAR=%s DSTCHAR=%s" "$SRCCHAR" "$DSTCHAR"
-
 declare -a DSTLABELS DSTDEVS DSTFS DST_VALID_FS
-# Do the same for correponding DST partitions labels, device, and fstype
+# Do the same for corresponding DST partitions labels, device, and fstype
 for ((i=0; i<${#LABELS[@]}; ++i)); do
     TMP="${LABELS[$i]}$DSTCHAR"
     log -n "Looking for [%s] label... " "$TMP"
@@ -445,8 +441,8 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
         log "skipping label %s" "${LABELS[$i]}"
         continue
     fi
-    SRCPART=/mnt/${SRCLABELS[$i]}/
-    DSTPART=/mnt/${DSTLABELS[$i]}
+    SRCPART="${AUTOFS_DIR}/${SRCLABELS[$i]}/"
+    DSTPART="$AUTOFS_DIR/${DSTLABELS[$i]}"
 
     #log -n "%s -> %s : " "$SRCPART" "$DSTPART"
     #log "\t%s %s %s %s %s" rsync "${RSYNCOPTS}" "$FILTER" "$SRCPART" "$DSTPART"
@@ -465,7 +461,7 @@ done
 # grub install
 if [[ "$GRUB" == yes ]]; then
     log "installing grub on $DST..."
-    DSTMNT="/mnt/$DSTROOTLABEL"
+    DSTMNT="$AUTOFS_DIR/$DSTROOTLABEL"
     # mount virtual devices
     echorun mount -o bind /sys  "$DSTMNT/sys"
     echorun mount -o bind /proc "$DSTMNT/proc"
