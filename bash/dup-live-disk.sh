@@ -69,14 +69,16 @@
 #       $ sudo dup-live-disk.sh sdb
 #
 # BUGS
-#       Cannot generate grub with a separate /boot partition.
-#       This script will not work for all situations, I strongly suggest you
-#       don't use it if you don't *fully* understand it.
+#       * Cannot generate grub with a separate /boot partition.
+#       * This script will not work for all situations, I strongly suggest you
+#         don't use it if you don't *fully* understand it.
+#       * Extended attributes are not preserved (easy fix, but I cannot test)
 #
 # TODO
-#       Write about autofs configuration.
-#       Log levels
-#       Check existence of fstab for new disk and install it
+#       * Write about autofs configuration.
+#       * Log levels
+#       * Check existence of prepared fstab on source root partition for
+#         destination root partition, and enable it.
 #%MAN_END%
 
 # command line
@@ -88,7 +90,7 @@ CMD="${0##*/}"
 VALIDFS=(ext3 ext4 btrfs vfat reiserfs xfs zfs)
 
 function man {
-    sed -n '/^#%MAN_BEGIN%/,/^#%MAN_END%$/{//!p}'  "$SCRIPT" | sed -E 's/^# ?//'
+    sed -n '/^#%MAN_BEGIN%/,/^#%MAN_END%$/{//!s/^#[ ]\{0,1\}//p}' "$SCRIPT"
 }
 
 function usage {
@@ -179,7 +181,7 @@ trap 'error_handler $LINENO $?' ERR SIGHUP SIGINT SIGTERM
 function exit_handler {
     local mnt
 
-    log "exit handler (at line $1)"
+    # log "exit handler (at line $1)"
     mariadb_maybe_start
     if [[ -n "$DSTMNT" ]] && mountpoint -q "$DSTMNT"; then
         for mnt in "$DSTMNT"/{dev,proc,sys}; do
