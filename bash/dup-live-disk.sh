@@ -77,8 +77,6 @@
 # TODO
 #       * Write about autofs configuration.
 #       * Log levels
-#       * Check existence of prepared fstab on source root partition for
-#         destination root partition, and enable it.
 #%MAN_END%
 
 # command line
@@ -212,6 +210,25 @@ function check_block_device {
         exit 1
     fi
     return 0
+}
+
+# check that /etc/fstab.XXX exists in SRCR
+function check_fstab {
+    local fstab
+    for f in "$SRCROOTLABEL" "$DSTROOTLABEL"; do
+        fstab="${AUTOFS_DIR}/$SRCROOTLABEL/etc/fstab.$f"
+        #log -n "======= check %s=%s " "$fstab" "$f"
+        if [[ ! -f "$fstab" ]]; then
+            log "Fatal: source or destination fstab (%s) not found" "$fstab"
+            return 1
+        fi
+    done
+    return 0
+}
+
+function fix_fstab {
+    local fstab="${AUTOFS_DIR}/$DSTROOTLABEL/etc/fstab"
+    echorun ln -f "$fstab.$DSTROOTLABEL" "$fstab"
 }
 
 # check if $1 is in array $2 ($2 is by reference)
@@ -435,6 +452,8 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
     echo
 done | column -N DEV1,DEV2,LABEL1,LABEL2,FS1,FS2,SVALID\?,DVALID\?,ROOT -t -o " | "
 
+check_fstab || exit 1
+
 RSYNCOPTS="-axH --delete --delete-excluded"
 FILTER=--filter="dir-merge .rsync-disk-copy"
 # copy loop
@@ -456,6 +475,9 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
         mariadb_maybe_stop
         # shellcheck disable=SC2086
         echorun rsync "$FILTER" ${RSYNCOPTS} "$SRCPART" "$DSTPART"
+        if [[ "$DSTROOTLABEL" == "${DSTLABELS[$i]}" ]]; then
+            fix_fstab
+        fi
     fi
     #log ""
 done
