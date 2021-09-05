@@ -23,12 +23,18 @@ struct hlist_node {
 };
 
 /************ originally in <include/linux/poison.h> */
-#define LIST_POISON1  ((void *) 0x100)
-#define LIST_POISON2  ((void *) 0x122)
+# define POISON_POINTER_DELTA 0
+/* These are non-NULL pointers that will result in page faults
+ * under normal circumstances, used to verify that nobody uses
+ * non-initialized list entries.
+ */
+#define LIST_POISON1  ((void *) 0x100 + POISON_POINTER_DELTA)
+#define LIST_POISON2  ((void *) 0x200 + POISON_POINTER_DELTA)
 
 /************ originally in <include/linux/kernel.h> */
-#define container_of(ptr, type, member) \
-    ((type *)((char *)(ptr) - offsetof(type, member)))
+#define container_of(ptr, type, member) ({				\
+	void *__mptr = (void *)(ptr);					\
+	((type *)(__mptr - offsetof(type, member))); })
 
 /*
  * Circular doubly linked list implementation.
@@ -953,7 +959,7 @@ static inline void hlist_move_list(struct hlist_head *old,
 #define hlist_for_each_entry(pos, head, member)				\
     for (pos = hlist_entry_safe((head)->first, __typeof__(*(pos)), member); \
          pos;                                                           \
-         pos = hlist_entry_safe((pos)->member.next, typeof(*(pos)), member))
+         pos = hlist_entry_safe((pos)->member.next, __typeof__(*(pos)), member))
 
 /**
  * hlist_for_each_entry_continue - iterate over a hlist continuing after current point
@@ -961,9 +967,9 @@ static inline void hlist_move_list(struct hlist_head *old,
  * @member:	the name of the hlist_node within the struct.
  */
 #define hlist_for_each_entry_continue(pos, member)			\
-    for (pos = hlist_entry_safe((pos)->member.next, typeof(*(pos)), member); \
+    for (pos = hlist_entry_safe((pos)->member.next, __typeof__(*(pos)), member); \
          pos;                                                           \
-         pos = hlist_entry_safe((pos)->member.next, typeof(*(pos)), member))
+         pos = hlist_entry_safe((pos)->member.next, __typeof__(*(pos)), member))
 
 /**
  * hlist_for_each_entry_from - iterate over a hlist continuing from current point
@@ -972,7 +978,7 @@ static inline void hlist_move_list(struct hlist_head *old,
  */
 #define hlist_for_each_entry_from(pos, member)				\
     for (; pos;                                                         \
-         pos = hlist_entry_safe((pos)->member.next, typeof(*(pos)), member))
+         pos = hlist_entry_safe((pos)->member.next, __typeof__(*(pos)), member))
 
 /**
  * hlist_for_each_entry_safe - iterate over list of given type safe against removal of list entry
@@ -982,8 +988,8 @@ static inline void hlist_move_list(struct hlist_head *old,
  * @member:	the name of the hlist_node within the struct.
  */
 #define hlist_for_each_entry_safe(pos, n, head, member) 		\
-    for (pos = hlist_entry_safe((head)->first, typeof(*pos), member);   \
+    for (pos = hlist_entry_safe((head)->first, __typeof__(*pos), member);   \
          pos && ({ n = pos->member.next; 1; });                         \
-         pos = hlist_entry_safe(n, typeof(*pos), member))
+         pos = hlist_entry_safe(n, __typeof__(*pos), member))
 
 #endif
