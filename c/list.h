@@ -4,6 +4,7 @@
  * Main change is that I don't use READ_ONCE and WRITE_ONCE
  * See https://www.kernel.org/doc/Documentation/memory-barriers.txt
  */
+
 #ifndef __BR_LIST_H
 #define __BR_LIST_H
 
