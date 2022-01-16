@@ -15,6 +15,8 @@
 #include <malloc.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
+
 #include "list.h"
 #include "pool.h"
 #include "debug.h"
@@ -44,11 +46,17 @@ pool_t *pool_create(const char *name, u32 growsize, size_t eltsize)
 
 #   ifdef DEBUG_POOL
     log_f(1, "name=[%s] growsize=%u eltsize=%lu\n",
-           name, growsize, eltsize);
+          name, growsize, eltsize);
 #   endif
-    /* we need at least this space in struct */
-    if (eltsize < sizeof (struct list_head))
-        return NULL;
+    /* we need at least  sizeof(struct list_head) space in pool elements
+     */
+    if (eltsize < sizeof (struct list_head)) {
+#       ifdef DEBUG_POOL
+        log_f(1, "[%s]: structure size too small (%lu < %lu), adjusting to %lu.\n",
+              name, eltsize, sizeof(struct list_head), sizeof(struct list_head));
+#       endif
+        eltsize = sizeof(struct list_head);
+    }
     if ((pool = malloc(sizeof (*pool)))) {
         strncpy(pool->name, name, POOL_NAME_LENGTH - 1);
         pool->name[POOL_NAME_LENGTH - 1] = 0;
@@ -67,11 +75,11 @@ static u32 _pool_add(pool_t *pool, struct list_head *elt)
 {
 #   ifdef DEBUG_POOL
     log_f(6, "pool=%p &head=%p elt=%p off1=%lu off2=%lu\n",
-           (void *)pool,
-           (void *)&pool->list_available,
-           (void *)elt,
-           (void *)&pool->list_available-(void *)pool,
-           offsetof(pool_t, list_available));
+          (void *)pool,
+          (void *)&pool->list_available,
+          (void *)elt,
+          (void *)&pool->list_available-(void *)pool,
+          offsetof(pool_t, list_available));
 #   endif
 
     list_add(elt, &pool->list_available);
@@ -102,8 +110,9 @@ void *pool_get(pool_t *pool)
 
         if (!block) {
 #           ifdef DEBUG_POOL
-            log_f(1, "[%s]: failed block allocation\n");
+            log_f(1, "[%s]: failed block allocation\n", pool->name);
 #           endif
+            errno = ENOMEM;
             return NULL;
         }
 
@@ -180,7 +189,7 @@ int main(int ac, char**av)
 
     debug_init(3);
     log_f(1, "%s: sizeof(d)=%lu sizeof(*d)=%lu off=%lu\n", *av, sizeof(elt),
-           sizeof(*elt), offsetof(struct d, list));
+          sizeof(*elt), offsetof(struct d, list));
 
     if ((pool = pool_create("dummy", 3, sizeof(*elt)))) {
         pool_stats(pool);
