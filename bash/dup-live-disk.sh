@@ -37,16 +37,27 @@
 #
 #       -c, --copy=ACTION
 #          ACTION can be 'yes' (all eligible partitions will be copied), 'no'
-#          (no partition will be copied), or 'ask' (will ask for all eligible
-#          partitions). Default is 'no'.
+#          (no partition will be copied), or 'ask'. Default is 'Ask'.
+#          See ACTIONS below.
 #
 #       -d, --dry-run
-#          Dry-run: nothing will be really be done.
+#          Dry-run: nothing will be really be written to disk. This option
+#          0verrides any of '--yes', '--copy', '--fstab', '--grub', and
+#          '--mariadb' options.
 #
-#       -g, --grub
-#          Install grub on destination disk.
-#          Warning: Only works if root partition contains all necessary for
-#          grub: /boot, /usr, etc...
+#       -f, --fstab=ACTION
+#          ACTION ('yes', 'no', or 'ask') defines whether fstab should be
+#          adjusted on destination root partition. Default is 'ask'.
+#          /etc/fstab/LABEL must exist on source root partition. LABEL is the
+#          partition LABEL of destination root disk.
+#          See ACTIONS below.
+#
+#       -g, --grub=ACTION
+#          ACTION ('yes', 'no', 'ask') defines if grub should be installed on
+#          destination disk). Default is 'ask'.
+#          Warning: Only works if root partition contains all necessary files
+#          for grub: /boot, /usr, etc...
+#          See ACTIONS below.
 #
 #       -h, --help
 #          Display short help and exit.
@@ -54,18 +65,38 @@
 #       -m, --man
 #          Display a "man-like" description and exit.
 #
-#       --mariadb
-#          Stop mysql/mariadb before effective copies, restart after.
+#       -M, --mariadb=ACTION
+#          ACTION may be 'yes', 'no', or 'ask', which indicates whether mysql
+#          or mariadb should be stopped before effective partition copies, and
+#          restarted after.
+#          See ACTIONS below.
+#
+#       -n, --no
+#          Will answer 'no' to any question asked to user.
 #
 #       -r, --root=PARTNUM
 #          Mandatory if SRC is provided, forbidden otherwise.
 #          PARTNUM is root partition number on SRC disk.
 #
+#       -y, --yes
+#          Will answer 'yes' to any question asked to user.
+#
+# ACTIONS
+#       Before writing anything, of if something unexpected happens, the
+#       program may ask to proceed. User may answer 'yes', 'no', or 'quit'.
+#       Options --yes, and --no will default respectively to 'yes' and 'no',
+#       default is to ask.
+#       Options '--copy', '--fstab', and '--grub' (which can take the values
+#       'yes', 'no', and 'ask') can override the specific action for copying
+#       partitions, adjusting destination fstab file, and
+#       installing grub on destination disk.
+#
 # EXAMPLES
-#       Copy sda to sdb, root partition is partition (sda1/sdb1)
+#       Copy sda to sdb, root partition is partition 1 (sda1/sdb1) on both
+#       disks.
 #       $ sudo dup-live-disk.sh --root 1 sda sdb
 #
-#       Copy live system (where / is mounted) to sdb
+#       Copy live disk (all partitions of current / partition disk) to sdb
 #       $ sudo dup-live-disk.sh sdb
 #
 # BUGS
@@ -98,40 +129,27 @@ Duplicate SRC (or live system) disk partitions to DST disk partitions.
 
 Options:
       -a, --autofs=DIR     autofs "LABEL-based" directory. Default is '/mnt'.
-      -c, --copy=ACTION    do partitions copies ('yes'), do not copy then ('no')
-                           or ask for each of them ('ask'). Default is 'no'.
+      -c, --copy=ACTION    do partitions copies (ACTION='yes', 'no, 'ask).
+                           Default is 'ask'
       -d, --dry-run        dry-run: nothing will be written to disk
-      -g, --grub           install grub on destination disk
+      -f, --fstab=ACTION   adjust fstab on destination disk ('yes', 'no, 'ask')
+                           Default is 'ask'
+      -g, --grub=ACTION    install grub on destination disk ('yes', 'no, 'ask')
+                           Default is 'ask'
       -h, --help           this help
       -m, --man            display a "man-like" page and exit
-      --mariadb            stop and restart mysql/mariadb server before and
-                           after copies
+      --mariadb=ACTION     stop and restart mysql/mariadb server before and
+                           after copies ('yes', 'no', 'ask').
+                           Default is 'ask'
+      -n, --no             Will answer 'no' to any question
       -r, --root=PARTNUM   root partition number on SRC device
                            mandatory if and only if SRC is provided
+      -y, --yes            Will answer 'yes' to any question
 
 SRC and DST have strong constraints on partitions schemes and naming.
 Type '$CMD --man" for more details"
 _EOF
-    exit 0
-}
-
-# mariadb start/stop
-function mariadb_maybe_stop {
-    if [[ $MARIADB == yes ]] && systemctl is-active --quiet mysql; then
-        #log -n "stopping mariadb/mysql... "
-        echorun systemctl stop mariadb
-        # bug if script stops here
-        MARIADBSTOPPED=yes
-        #log "done."
-    fi
-}
-function mariadb_maybe_start {
-    if [[ $MARIADB == yes && $MARIADBSTOPPED == yes ]]; then
-        #log -n "restarting mariadb/mysql... "
-        echorun systemctl start mariadb
-        MARIADBSTOPPED=no
-        #log "done."
-    fi
+    return 0
 }
 
 # log function
@@ -162,11 +180,36 @@ function log {
 # prints out and run a command.
 function echorun {
     if [[ "$DRYRUN" == 'yes' ]]; then
-        log "%s " "dry-run: " "$@"
+        log "dry-run: %s" "$*"
     else
-        log "%s " "$@"
+        log "%s" "$*"
         "$@"
     fi
+}
+
+yesno() {
+    local reason answer
+
+    # shellcheck disable=SC2059
+    printf -v reason "*** $1 [y/n/q] ? " "${@:2}"
+
+    while true; do
+        if [[ ! -z $YESNO ]]; then
+            answer="$YESNO"
+            # shellcheck disable=SC2059
+            printf "$reason%s\n" "$answer"
+        else
+            read -p "$reason" -r answer
+        fi
+        case "${answer,,}" in
+            y|yes) return 0
+                   ;;
+            n|no) return 1
+                  ;;
+            q|quit) printf "Aborting...\n"
+                    exit 1
+        esac
+    done
 }
 
 function error_handler {
@@ -189,8 +232,39 @@ function exit_handler {
         done
     fi
 }
-
 trap 'exit_handler $LINENO' EXIT
+
+# mariadb start/stop
+function mariadb_maybe_stop {
+    [[ $MARIADBSTOPPED == yes ]] && return 0
+    if systemctl is-active --quiet mysql; then
+        if [[ $MARIADB == ask ]]; then
+            if yesno "Stop MariaDB/MySQL"; then
+               MARIADB=yes
+            else
+               MARIADB=no
+            fi
+        fi
+        if [[ $MARIADB == no ]]; then
+            log "Warning: MariaDB/MySQL is running, database corruption possible on DEST disk."
+            return 0
+        fi
+        echorun systemctl stop mariadb
+        # bug if script stops here
+        MARIADBSTOPPED=yes
+    else
+        log "MariaDB/MySQL is inactive."
+    fi
+}
+
+function mariadb_maybe_start {
+    if [[ $MARIADB == yes && $MARIADBSTOPPED == yes ]]; then
+        #log -n "restarting mariadb/mysql... "
+        echorun systemctl start mariadb
+        MARIADBSTOPPED=no
+        #log "done."
+    fi
+}
 
 function check_block_device {
     local devtype="$1"
@@ -212,23 +286,32 @@ function check_block_device {
     return 0
 }
 
-# check that /etc/fstab.XXX exists in SRCR
+# check that /etc/fstab.DESTLABEL exists in SRC disk.
 function check_fstab {
-    local fstab
-    for f in "$SRCROOTLABEL" "$DSTROOTLABEL"; do
-        fstab="${AUTOFS_DIR}/$SRCROOTLABEL/etc/fstab.$f"
-        #log -n "======= check %s=%s " "$fstab" "$f"
-        if [[ ! -f "$fstab" ]]; then
-            log "Fatal: source or destination fstab (%s) not found" "$fstab"
-            return 1
-        fi
-    done
+    local fstab="${AUTOFS_DIR}/$SRCROOTLABEL/etc/fstab.$DSTROOTLABEL"
+    #if [[ "$FSTAB" != no ]]; then
+    if [[ ! -f "$fstab" ]]; then
+        FSTAB=no
+        log "Warning: No target fstab (%s) on SRC disk" "$fstab"
+    else
+        log "Info: target fstab (%s) exists on SRC disk" "$fstab"
+    fi
     return 0
 }
 
 function fix_fstab {
     local fstab="${AUTOFS_DIR}/$DSTROOTLABEL/etc/fstab"
-    echorun ln -f "$fstab.$DSTROOTLABEL" "$fstab"
+
+    #[[ ! -f "$fstab" ]] && log "Warning: DST fstab will be wrong !" && FSTAB=no
+    if [[ "$FSTAB" == ask ]]; then
+        yesno "Link %s to %s" "$fstab.$DSTROOTLABEL" "$fstab" && FSTAB=yes || FSTAB=no
+    fi
+    if [[ "$FSTAB" == no ]]; then
+        log "Warning: DST fstab will be *wrong*, boot is compromised"
+    else
+        echorun ln -f "$fstab.$DSTROOTLABEL" "$fstab"
+    fi
+    return 0
 }
 
 # check if $1 is in array $2 ($2 is by reference)
@@ -241,29 +324,6 @@ function in_array {
     return 1
 }
 
-# get y/n/q user input
-function yesno {
-    local input
-    while true; do
-        printf "%s " "$1"
-        read -r input
-        case "$input" in
-            y|Y)
-                return 0
-                ;;
-            q|Q)
-                log "aborting..."
-                exit 0
-                ;;
-            n|N)
-                return 1
-                ;;
-            *)
-                printf "invalid answer. "
-        esac
-    done
-}
-
 # source and destination devices, root partition
 SRC=""
 DST=""
@@ -272,14 +332,22 @@ ROOTPARTNUM=""
 AUTOFS_DIR=/mnt
 
 DRYRUN=no                                         # dry-run
-GRUB=no                                           # install grub
-COPY=no                                           # do FS copies
-MARIADB=no                                        # stop/start mysql/mariadb
+FSTAB=ask                                         # adjust fstab
+GRUB=ask                                          # install grub
+COPY=ask                                          # do FS copies
+MARIADB=ask                                       # stop/start mysql/mariadb
 MARIADBSTOPPED=no                                 # mysql stopped ?
+YESNO=ask                                         # default answer
 
 # short and long options
-SOPTS="a:c:dghmr:"
-LOPTS="autofs:,copy:,dry-run,grub,help,man,mariadb,root:"
+SOPTS="a:c:df:g:hM:m:nr:y"
+LOPTS="autofs:,copy:,dry-run,fstab:,grub:,help,man,mariadb:,no,root:,yes"
+
+# check if current user is root
+if (( EUID != 0 )); then
+    log "This script must be run as root... Aborting."
+    exit 1
+fi
 
 if ! TMP=$(getopt -o "$SOPTS" -l "$LOPTS" -n "$CMD" -- "$@"); then
     log "Use '$CMD --help' or '$CMD --man' for help."
@@ -296,7 +364,7 @@ while true; do
             shift
             ;;
         '-c'|'--copy')
-            case "$2" in
+            case "${2,,}" in
                 "no") COPY=no;;
                 "yes") COPY=yes;;
                 "ask") COPY=ask;;
@@ -309,8 +377,27 @@ while true; do
         '-d'|'--dry-run')
             DRYRUN=yes
             ;;
+        '-f'|'--fstab')
+            case "${2,,}" in
+                "no") FSTAB=no;;
+                "yes") FSTAB=yes;;
+                "ask") FSTAB=ask;;
+                *) log "invalid '$2' --fstab flag"
+                   usage
+                   exit 1
+            esac
+            shift
+            ;;
         '-g'|'--grub')
-            GRUB=yes
+            case "${2,,}" in
+                "no") GRUB=no;;
+                "yes") GRUB=yes;;
+                "ask") GRUB=ask;;
+                *) log "invalid '$2' --grub flag"
+                   usage
+                   exit 1
+            esac
+            shift
             ;;
         '-h'|'--help')
             usage
@@ -320,8 +407,19 @@ while true; do
             man
             exit 0
             ;;
-        '--mariadb')
-            MARIADB=yes
+        '-n'|'--no')
+            YESNO=no
+            ;;
+        '-M'|'--mariadb')
+            case "${2,,}" in
+                "no") MARIADB=no;;
+                "yes") MARIADB=yes;;
+                "ask") MARIADB=ask;;
+                *) log "invalid '$2' --mariadb flag"
+                   usage
+                   exit 1
+            esac
+            shift
             ;;
         '-r'|'--root')
             ROOTPARTNUM="$2"
@@ -334,6 +432,9 @@ while true; do
         '--')
             shift
             break
+            ;;
+        '-y'|'--yes')
+            YESNO=yes
             ;;
         *)
             usage
@@ -367,6 +468,11 @@ case "$#" in
         SRCROOT="$SRC$ROOTPARTNUM"
         DST="/dev/$2"
         ;;
+    0)
+        log "Missing destination disk."
+        usage
+        exit 1
+        ;;
     *)
         usage
         exit 1
@@ -374,7 +480,7 @@ esac
 
 # check SRC and DST are different, find out their characteristics
 if [[ "$SRC" = "$DST" ]]; then
-    log "%s: Fatal: destination disk (%s) cannot be source.\n" "$CMD" "$SRC"
+    log "Fatal: destination and source disk are identical (%s)" "$SRC"
     log "Use '%s --help' or '%s --man' for help." "$CMD" "$CMD"
     exit 1
 fi
@@ -383,7 +489,6 @@ check_block_device "destination disk" w "$DST"
 check_block_device "source root partition" r "$SRCROOT"
 
 SRCROOTLABEL=$(lsblk -no label "$SRCROOT")
-SRCCHAR=${SRCROOTLABEL: -1}
 ROOTLABEL=${SRCROOTLABEL:0:-1}
 
 # find out all partitions labels on SRC disk...
@@ -394,9 +499,9 @@ declare -a LABELS=(${SRCLABELS[@]%?})
 
 # ... and corresponding partition device and fstype
 declare -a SRCDEVS SRCFS SRC_VALID_FS
-for ((i=0; i<${#LABELS[@]}; ++i)); do
-    TMP="${LABELS[$i]}$SRCCHAR"
+for ((i=0; i<${#SRCLABELS[@]}; ++i)); do
     TMP="${SRCLABELS[$i]}"
+    #log "TMP=%s" "$TMP"
     TMPDEV=$(findfs LABEL="$TMP")
     TMPFS=$(lsblk -no fstype "$TMPDEV")
     log "found LABEL=$TMP DEV=$TMPDEV FSTYPE=$TMPFS"
@@ -422,13 +527,13 @@ declare -a DSTLABELS DSTDEVS DSTFS DST_VALID_FS
 # Do the same for corresponding DST partitions labels, device, and fstype
 for ((i=0; i<${#LABELS[@]}; ++i)); do
     TMP="${LABELS[$i]}$DSTCHAR"
-    log -n "Looking for [%s] label... " "$TMP"
+    log -n "Looking for [%s] label : " "$TMP"
     if ! TMPDEV=$(findfs LABEL="$TMP"); then
         log "not found."
         exit 1
     fi
     TMPDISK=${TMPDEV%?}
-    log -n "DEV=%s... DISK=%s..." "$TMPDEV" "$TMPDISK"
+    log -n "DEV=%s... DISK=%s... " "$TMPDEV" "$TMPDISK"
     if [[ "$TMPDISK" != "$DST" ]]; then
         log "wrong disk (%s != %s)" "$TMPDISK" "$DST"
         exit 1
@@ -469,7 +574,7 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
     #log "\t%s %s %s %s %s" rsync "${RSYNCOPTS}" "$FILTER" "$SRCPART" "$DSTPART"
     copy="$COPY"
     if [[ "$COPY" == 'ask' ]]; then
-        yesno "Copy $SRCPART to $DSTPART ? [y/n/q]" && copy=yes || copy=no
+        yesno "Copy $SRCPART to $DSTPART" && copy=yes || copy=no
     fi
     if [[ "$copy" == yes ]]; then
         mariadb_maybe_stop
@@ -481,10 +586,19 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
     fi
     #log ""
 done
+mariadb_maybe_start
 
 # grub install
-if [[ "$GRUB" == yes ]]; then
+if [[ $GRUB == ask ]]; then
+    if ! yesno "install grub on %s (root: %s)" "$GRUB_DEV" "$GRUB_ROOT"; then
+        GRUB=no
+    fi
+fi
+if [[ $GRUB == no ]]; then
+    log "Warning: Skipping grub install on %s, boot %s will maybe fail." "$DST"
+else
     log "installing grub on $DST..."
+
     DSTMNT="$AUTOFS_DIR/$DSTROOTLABEL"
     # mount virtual devices
     echorun mount -o bind /sys  "$DSTMNT/sys"
