@@ -2,7 +2,7 @@
 #
 # dup-live-disk.sh - duplicate (possibly live) system partitions
 #
-# (C) Bruno Raoult ("br"), 2007-2021
+# (C) Bruno Raoult ("br"), 2007-2022
 # Licensed under the Mozilla Public License (MPL) version 2.0.
 # Some rights reserved. See COPYING.
 #
@@ -533,7 +533,7 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
         exit 1
     fi
     TMPDISK=${TMPDEV%?}
-    log -n "DEV=%s... DISK=%s... " "$TMPDEV" "$TMPDISK"
+    log -n "DEV=%s DISK=%s " "$TMPDEV" "$TMPDISK"
     if [[ "$TMPDISK" != "$DST" ]]; then
         log "wrong disk (%s != %s)" "$TMPDISK" "$DST"
         exit 1
