@@ -106,7 +106,7 @@
 #       $ sudo dup-live-disk.sh --yes sdb
 #
 #       Do not copy partitions, only install grub on sdb.
-#       $ sudo ./dup-live-disk.sh --copy=no --grub=yes sda
+#       $ sudo ./dup-live-disk.sh --copy=no --grub=yes sdb
 #       or
 #       $ sudo ./dup-live-disk.sh --no --grub=yes sdb
 #
