@@ -110,6 +110,30 @@
 #       or
 #       $ sudo ./dup-live-disk.sh --no --grub=yes sdb
 #
+# AUTOFS
+#       This script relies on autofs to mount partitions according to partitions
+#       LABELS. See autofs(5) and auto.master(5) for more details.
+#       For example, the following will mount partitions withs LABELS 'root1',
+#       'root2' in /mnt/hd/root1 and /mnt/hd/root2, simply when we try to access
+#       the directories (for example with 'ls /mnt/hd/root1') :
+#
+#       # in file /etc/auto.master
+#       /mnt/hd   /etc/auto.hd              --timeout 60 --ghost
+#
+#       # in file /etc/auto.hd
+#       *         -fstype=auto,defaults     :LABEL=&
+#
+#       This script uses /mnt as default autofs directory. In fact, /mnt contains
+#       symbolic links to different disk labels :
+#
+#       $ ls -l /mnt/root?
+#       lrwxrwxrwx 1 root root 8 Oct 10  2020 /mnt/root1 -> hd/root1/
+#       lrwxrwxrwx 1 root root 8 May 25  2018 /mnt/root2 -> hd/root2/
+#
+#       It means that accessing /mnt/root1 will automagically mount /mnt/hd/root1.
+#       With the maps above, and without the /mnt symlinks, it is possible to
+#       use '--autofs=/mnt/hd' to directly use the automounter map.
+#
 # BUGS
 #       * Cannot generate grub with a separate /boot partition.
 #       * This script will not work for all situations, I strongly suggest you
@@ -117,7 +141,6 @@
 #       * Extended attributes are not preserved (easy fix, but I cannot test)
 #
 # TODO
-#       * Write about autofs configuration.
 #       * Log levels
 #%MAN_END%
 
