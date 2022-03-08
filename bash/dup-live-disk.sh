@@ -194,7 +194,7 @@ yesno() {
     printf -v reason "*** $1 [y/n/q] ? " "${@:2}"
 
     while true; do
-        if [[ ! -z $YESNO ]]; then
+        if [[ $YESNO =~ ^(yes|no)$ ]]; then
             answer="$YESNO"
             # shellcheck disable=SC2059
             printf "$reason%s\n" "$answer"
@@ -337,7 +337,7 @@ GRUB=ask                                          # install grub
 COPY=ask                                          # do FS copies
 MARIADB=ask                                       # stop/start mysql/mariadb
 MARIADBSTOPPED=no                                 # mysql stopped ?
-YESNO=ask                                         # default answer
+YESNO=                                            # default answer
 
 # short and long options
 SOPTS="a:c:df:g:hM:m:nr:y"
