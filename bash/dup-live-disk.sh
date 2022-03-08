@@ -138,7 +138,7 @@ Options:
                            Default is 'ask'
       -h, --help           this help
       -m, --man            display a "man-like" page and exit
-      --mariadb=ACTION     stop and restart mysql/mariadb server before and
+      -M, --mariadb=ACTION stop and restart mysql/mariadb server before and
                            after copies ('yes', 'no', 'ask').
                            Default is 'ask'
       -n, --no             Will answer 'no' to any question
@@ -177,8 +177,8 @@ function log {
     return 0
 }
 
-# prints out and run a command.
-function echorun {
+# prints out and run (maybe) a command.
+function echorun_maybe {
     if [[ "$DRYRUN" == 'yes' ]]; then
         log "dry-run: %s" "$*"
     else
@@ -212,28 +212,6 @@ yesno() {
     done
 }
 
-function error_handler {
-    local ERROR=$2
-    log "FATAL: Error line $1, exit code $2. Aborting."
-    exit "$ERROR"
-}
-trap 'error_handler $LINENO $?' ERR SIGHUP SIGINT SIGTERM
-
-function exit_handler {
-    local mnt
-
-    # log "exit handler (at line $1)"
-    mariadb_maybe_start
-    if [[ -n "$DSTMNT" ]] && mountpoint -q "$DSTMNT"; then
-        for mnt in "$DSTMNT"/{dev,proc,sys}; do
-            if mountpoint -q "$mnt"; then
-                echorun umount "$mnt"
-            fi
-        done
-    fi
-}
-trap 'exit_handler $LINENO' EXIT
-
 # mariadb start/stop
 function mariadb_maybe_stop {
     [[ $MARIADBSTOPPED == yes ]] && return 0
@@ -249,7 +227,7 @@ function mariadb_maybe_stop {
             log "Warning: MariaDB/MySQL is running, database corruption possible on DEST disk."
             return 0
         fi
-        echorun systemctl stop mariadb
+        echorun_maybe systemctl stop mariadb
         # bug if script stops here
         MARIADBSTOPPED=yes
     else
@@ -260,11 +238,33 @@ function mariadb_maybe_stop {
 function mariadb_maybe_start {
     if [[ $MARIADB == yes && $MARIADBSTOPPED == yes ]]; then
         #log -n "restarting mariadb/mysql... "
-        echorun systemctl start mariadb
+        echorun_maybe systemctl start mariadb
         MARIADBSTOPPED=no
         #log "done."
     fi
 }
+
+function error_handler {
+    local ERROR=$2
+    log "FATAL: Error line $1, exit code $2. Aborting."
+    exit "$ERROR"
+}
+trap 'error_handler $LINENO $?' ERR SIGHUP SIGINT SIGTERM
+
+function exit_handler {
+    local mnt
+
+    # log "exit handler (at line $1)"
+    mariadb_maybe_start
+    if [[ -n "$DSTMNT" ]] && mountpoint -q "$DSTMNT"; then
+        for mnt in "$DSTMNT"/{dev,proc,sys}; do
+            if mountpoint -q "$mnt"; then
+                echorun_maybe umount "$mnt"
+            fi
+        done
+    fi
+}
+trap 'exit_handler $LINENO' EXIT
 
 function check_block_device {
     local devtype="$1"
@@ -288,13 +288,14 @@ function check_block_device {
 
 # check that /etc/fstab.DESTLABEL exists in SRC disk.
 function check_fstab {
-    local fstab="${AUTOFS_DIR}/$SRCROOTLABEL/etc/fstab.$DSTROOTLABEL"
+    local etc="${AUTOFS_DIR}/$SRCROOTLABEL/etc"
+    local fstab="fstab.$DSTROOTLABEL"
     #if [[ "$FSTAB" != no ]]; then
-    if [[ ! -f "$fstab" ]]; then
+    if [[ ! -f "$etc/$fstab" ]]; then
         FSTAB=no
-        log "Warning: No target fstab (%s) on SRC disk" "$fstab"
+        log "Warning: No target fstab (%s) on SRC disk" "$etc/$fstab"
     else
-        log "Info: target fstab (%s) exists on SRC disk" "$fstab"
+        log "Info: Found target fstab (%s) in SRC root partition (%s)." "$fstab" "$etc"
     fi
     return 0
 }
@@ -309,7 +310,7 @@ function fix_fstab {
     if [[ "$FSTAB" == no ]]; then
         log "Warning: DST fstab will be *wrong*, boot is compromised"
     else
-        echorun ln -f "$fstab.$DSTROOTLABEL" "$fstab"
+        echorun_maybe ln -f "$fstab.$DSTROOTLABEL" "$fstab"
     fi
     return 0
 }
@@ -338,6 +339,7 @@ COPY=ask                                          # do FS copies
 MARIADB=ask                                       # stop/start mysql/mariadb
 MARIADBSTOPPED=no                                 # mysql stopped ?
 YESNO=                                            # default answer
+ROOTCOPIED=no                                     # was root partition copied ?
 
 # short and long options
 SOPTS="a:c:df:g:hM:m:nr:y"
@@ -579,8 +581,9 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
     if [[ "$copy" == yes ]]; then
         mariadb_maybe_stop
         # shellcheck disable=SC2086
-        echorun rsync "$FILTER" ${RSYNCOPTS} "$SRCPART" "$DSTPART"
+        echorun_maybe rsync "$FILTER" ${RSYNCOPTS} "$SRCPART" "$DSTPART"
         if [[ "$DSTROOTLABEL" == "${DSTLABELS[$i]}" ]]; then
+            ROOTCOPIED=yes
             fix_fstab
         fi
     fi
@@ -595,18 +598,22 @@ if [[ $GRUB == ask ]]; then
     fi
 fi
 if [[ $GRUB == no ]]; then
-    log "Warning: Skipping grub install on %s, boot %s will maybe fail." "$DST"
+    if [[ $ROOTCOPIED == yes ]]; then
+        log "Warning: root filesystem changed, and skipping grub install on %s, boot will probably fail." "$DST"
+    else
+        log "Warning: Skipping grub install on %s." "$DST"
+    fi
 else
     log "installing grub on $DST..."
 
     DSTMNT="$AUTOFS_DIR/$DSTROOTLABEL"
     # mount virtual devices
-    echorun mount -o bind /sys  "$DSTMNT/sys"
-    echorun mount -o bind /proc "$DSTMNT/proc"
-    echorun mount -o bind /dev  "$DSTMNT/dev"
+    echorun_maybe mount -o bind /sys  "$DSTMNT/sys"
+    echorun_maybe mount -o bind /proc "$DSTMNT/proc"
+    echorun_maybe mount -o bind /dev  "$DSTMNT/dev"
 
-    echorun chroot "$DSTMNT" update-grub
-    echorun chroot "$DSTMNT" grub-install "$DST"
+    echorun_maybe chroot "$DSTMNT" update-grub
+    echorun_maybe chroot "$DSTMNT" grub-install "$DST"
 fi
 
 exit 0
