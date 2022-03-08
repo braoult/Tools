@@ -93,11 +93,22 @@
 #
 # EXAMPLES
 #       Copy sda to sdb, root partition is partition 1 (sda1/sdb1) on both
-#       disks.
+#       disks. The user will be asked for any action (partition copy, grub,
+#       etc...)
 #       $ sudo dup-live-disk.sh --root 1 sda sdb
 #
-#       Copy live disk (all partitions of current / partition disk) to sdb
+#       Copy live disk (all partitions of current / partition disk) to sdb.
+#       The user will be asked for any action (partition copy, grub, etc...)
 #       $ sudo dup-live-disk.sh sdb
+#
+#       Copy live disk (all partitions of current / partition disk) to sdb.
+#       All valid partitions will be copied, and grub installed on sdb.
+#       $ sudo dup-live-disk.sh --yes sdb
+#
+#       Do not copy partitions, only install grub on sdb.
+#       $ sudo ./dup-live-disk.sh --copy=no --grub=yes sda
+#       or
+#       $ sudo ./dup-live-disk.sh --no --grub=yes sdb
 #
 # BUGS
 #       * Cannot generate grub with a separate /boot partition.
@@ -342,7 +353,7 @@ YESNO=                                            # default answer
 ROOTCOPIED=no                                     # was root partition copied ?
 
 # short and long options
-SOPTS="a:c:df:g:hM:m:nr:y"
+SOPTS="a:c:df:g:hmM:nr:y"
 LOPTS="autofs:,copy:,dry-run,fstab:,grub:,help,man,mariadb:,no,root:,yes"
 
 # check if current user is root
