@@ -2,14 +2,14 @@
 #
 # trans.sh - Translate words using linguee.com.
 #
-# (C) Bruno Raoult ("br"), 2021
-# Licensed under the Mozilla Public License (MPL) version 2.0.
+# (C) Bruno Raoult ("br"), 2021-2022
+# Licensed under the GNU General Public License v3.0 or later.
 # Some rights reserved. See COPYING.
 #
-# You should have received a copy of the Mozilla Public License along with this
-# program.  If not, see <https://www.mozilla.org/en-US/MPL>
+# You should have received a copy of the GNU General Public License along with this
+# program. If not, see <https://www.gnu.org/licenses/gpl-3.0-standalone.html>.
 #
-# SPDX-License-Identifier: MPL-2.0 <https://spdx.org/licenses/MPL-2.0.html>
+# SPDX-License-Identifier: GPL-3.0-or-later <https://spdx.org/licenses/GPL-3.0-or-later.html>
 #
 # Options: See usage function in code below.
 
