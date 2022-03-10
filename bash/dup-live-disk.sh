@@ -153,7 +153,7 @@ CMD="${0##*/}"
 VALIDFS=(ext3 ext4 btrfs vfat reiserfs xfs zfs)
 
 function man {
-    sed -n '/^#%MAN_BEGIN%/,/^#%MAN_END%$/{//!s/^#[ ]\{0,1\}//p}' "$SCRIPT"
+    sed -n '/^#%MAN_BEGIN%/,/^#%MAN_END%$/{//!s/^#[ ]\{0,1\}//p}' "$SCRIPT" | more
 }
 
 function usage {
@@ -293,7 +293,10 @@ function exit_handler {
     if [[ -n "$DSTMNT" ]] && mountpoint -q "$DSTMNT"; then
         for mnt in "$DSTMNT"/{dev,proc,sys}; do
             if mountpoint -q "$mnt"; then
-                echorun_maybe umount "$mnt"
+                # https://unix.stackexchange.com/questions/693346
+                if ! echorun_maybe umount "$mnt"; then
+                    echorun_maybe umount --lazy "$mnt"
+                fi
             fi
         done
     fi
@@ -378,12 +381,6 @@ ROOTCOPIED=no                                     # was root partition copied ?
 # short and long options
 SOPTS="a:c:df:g:hmM:nr:y"
 LOPTS="autofs:,copy:,dry-run,fstab:,grub:,help,man,mariadb:,no,root:,yes"
-
-# check if current user is root
-if (( EUID != 0 )); then
-    log "This script must be run as root... Aborting."
-    exit 1
-fi
 
 if ! TMP=$(getopt -o "$SOPTS" -l "$LOPTS" -n "$CMD" -- "$@"); then
     log "Use '$CMD --help' or '$CMD --man' for help."
@@ -480,6 +477,12 @@ while true; do
     esac
     shift
 done
+
+# check if current user is root
+if (( EUID != 0 )); then
+    log "This script must be run as root... Aborting."
+    exit 1
+fi
 
 case "$#" in
     1)
