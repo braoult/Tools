@@ -38,8 +38,16 @@ typedef uint64_t u64;
 typedef uint32_t u32;
 typedef uint16_t u16;
 typedef uint8_t  u8;
+
+typedef unsigned long int ulong;
 typedef unsigned int uint;
+typedef unsigned short ushort;
 typedef unsigned char uchar;
+
+typedef signed long int slong;
+typedef signed int sint;
+typedef signed short sshort;
+typedef signed char schar;
 
 /* count trailing zeroes : 00101000 -> 3
  *                              ^^^

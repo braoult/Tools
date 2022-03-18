@@ -993,4 +993,4 @@ static inline void hlist_move_list(struct hlist_head *old,
          pos && ({ n = pos->member.next; 1; });                         \
          pos = hlist_entry_safe(n, __typeof__(*pos), member))
 
-#endif
+#endif  /* __BR_LIST_H */
