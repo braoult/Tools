@@ -458,6 +458,7 @@ do
         #   - "vanished file" (exit code 24).
         #   - others?
         status=0
+        # shellcheck disable=SC2086
         echorun rsync \
             -aHixv \
             "${FILTER}" \
