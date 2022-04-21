@@ -152,9 +152,10 @@ LOCKED=n                        # indicates if we created lock file.
 SUBJECT="${0##*/} ${*##*/}"     # mail subject (removes paths)
 ERROR=0                         # set by error_handler when called
 STARTTIME=$(date +%s)           # time since epoch in seconds
+CMDNAME=${0##*/}
 
 usage () {
-    echo "usage: ${0##*/} [-ymwdnfrzuD]" config-file
+    printf "usage: %s [-ymwdnfrzuD] config-file\n" "$CMDNAME"
     exit 1
 }
 
@@ -185,6 +186,7 @@ if [[ ! -f "$CONFIG" ]]; then
     echo "No $CONFIG file."
     usage
 fi
+# shellcheck source=/dev/null
 source "$CONFIG"
 
 # we set backups to be done if none has been set yet (i.e. none is "y").
@@ -261,27 +263,48 @@ exit_handler() {
         exec 0<<<""             # force empty input for the following
     fi
 
+    SECS=$(($(date +%s)-STARTTIME))
+
     # Warning: no logs allowed here (before next braces), as stdout is no
     # more handled the final way.
     {
-        SECS=$(($(date +%s)-STARTTIME))
-
         # we write these logs here so that they are on top if no DEBUG.
-        log "Exit code: $ERROR"
-        log "$(printf "Elapsed time: $SECS seconds (%d:%02d:%02d)\n\n" \
-            $((SECS/3600)) $((SECS%3600/60)) $((SECS%60)))"
+        printf "%s: Exit code: %d\n\n" "$CMDNAME" "$ERROR"
+        printf "Elapsed time: %d seconds (%d:%02d:%02d)\n\n" \
+            $((SECS)) $((SECS/3600)) $((SECS%3600/60)) $((SECS%60))
 
         if [[ -n $FILTERLNK ]]; then
-            grep -vE "^(hf|cd|cL)[ \+]" ;
+            grep -vE "^(hf|cd|cL)[ \+]"
         else
-            cat ;
+            cat
         fi
     } |
     {
         if [[ -n $MAILTO ]]; then
-            mail -s "${SUBJECT}" "${MAILTO}";
+            MIMESTR="FEDCBA987654321"
+            MIMEHDR="Content-Type: multipart/mixed; boundary=\"$MIMESTR\""
+            {
+                # We write a short information in email's body
+                printf "\n--%s\n" "$MIMESTR"
+                printf 'Content-Type: text/plain; charset=UTF-8\n'
+                printf '\n'
+
+                # send first lines in message body (until the mark line)
+                while read -r line; do
+                    [[ $line =~ ^\*+\ Mark$ ]] && break
+                    printf "%s\n" "$line"
+                done
+
+                printf "\n--%s\n" "$MIMESTR"
+                printf "Content-Type: application/gzip\n"
+                printf "Content-Transfer-Encoding: base64\n"
+                printf 'Content-Disposition: attachment; filename="sync.log.txt.gz"\n'
+                printf '\n'
+                gzip | uuencode -m "dummy" | sed '1d; $d'
+                printf "\n--%s--\n" "$MIMESTR"
+            } | mail -a "$MIMEHDR" -s "${SUBJECT}" "${MAILTO}"
         else
-            cat;
+            cat
         fi
     }
 }
@@ -300,7 +323,10 @@ if [[ ! -d $SOURCEDIR ]]; then
     log -s "Source directory (\"${SOURCEDIR}\") is not a valid directory."
     error_handler $LINENO 1
 fi
-cd ${SOURCEDIR}
+if ! cd ${SOURCEDIR}; then
+    log -s "Cannot cd to \"${SOURCEDIR}\"."
+    error_handler $LINENO 1
+fi
 
 # prepare list of backups, such as "daily 7 weekly 4", etc...
 TODO=()
@@ -310,10 +336,30 @@ TODO=()
 [[ $YEARLY = y && $NYEARS -gt 0 ]]   && TODO+=(yearly "$NYEARS")
 
 log -l -t "Starting backup."
+log "Hostname: $(hostname)"
+log "Operating System: $(uname -sr) on $(uname -m)"
+log "Bash version: ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}.${BASH_VERSINFO[2]}"
 log "Config : ${CONFIG}"
 log "Src dir: ${SOURCEDIR}"
 log "Dst dir: ${SERVER}:${DESTDIR}"
-log "Actions: ${TODO[@]}"
+log "Actions: ${TODO[*]}"
+# check for available gzip and uuencode
+declare -a cmdavail=()
+for cmd in gzip uuencode; do
+    log -n "Checking for $cmd... "
+    if type -p "$cmd" > /dev/null; then
+        log "ok"
+    else
+        log "NOK"
+        cmdavail+=("$cmd")
+    fi
+done
+if (( ${#cmdavail[@]} )); then
+    log -s "Fatal. Please install the followine: ${cmdavail[*]}."
+    error_handler $LINENO 1
+fi
+
+log -s "Mark"                   # to separate email body
 
 # select handling depending on local or networked target (ssh or not).
 if [[ $SERVER = local ]]; then  # local backup
@@ -342,6 +388,7 @@ echorun () {
 # we first build a list from $2 to zero, with 2 padded digits: 03 02 01 00
 # then we remove $1-03, and move $1-02 to $1-03, $1-01 to $1-02, etc...
 rotate-files () {
+    # shellcheck disable=SC2207
     files=( $(seq -f "${DESTDIR}/${1}-%02g" "${2}" -1 0) )
     log -s -t -n "${files[0]##*/} deletion... "
     status=0
@@ -364,7 +411,7 @@ rotate-files () {
             [[ $DEBUG = y ]] && log -n "${files[1]:(-2)} "
             ${MOVE} "${files[1]}" "${files[0]}"
         fi
-        unset files[0]          # shift and pack array
+        unset "files[0]"        # shift and pack array
         files=( "${files[@]}" )
     done
     log "done."
