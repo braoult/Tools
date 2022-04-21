@@ -22,7 +22,6 @@
 #define _unused __attribute__((__unused__))
 #define _printf __attribute__ ((format (printf, 6, 7)))
 #ifdef DEBUG_DEBUG
-#define _printf __attribute__ ((format (printf, 6, 7)))
 void debug_init(u32 level);
 void debug_level_set(u32 level);
 void debug_devel_set(u32 level);
