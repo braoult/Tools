@@ -241,9 +241,9 @@ trap 'error_handler $LINENO $?' ERR SIGHUP SIGINT SIGTERM
 exit_handler() {
     # we dont need lock file anymore (another backup could start from now).
     log "exit_handler LOCKED=$LOCKED"
-    #if [[ "$LOCKED" = y ]]; then
-    rm --dir --verbose "${LOCKFILE}"
-    #fi
+    if [[ "$LOCKED" = y ]]; then
+        rm --dir --verbose "${LOCKFILE}"
+    fi
 
     if (( ERROR == 0 )); then
         SUBJECT="Successful $SUBJECT"
@@ -269,8 +269,14 @@ exit_handler() {
     # more handled the final way.
     {
         # we write these logs here so that they are on top if no DEBUG.
-        printf "%s: Exit code: %d\n\n" "$CMDNAME" "$ERROR"
-        printf "Elapsed time: %d seconds (%d:%02d:%02d)\n\n" \
+        printf "%s: Exit code: %d " "$CMDNAME" "$ERROR"
+        if ((ERROR == 0)); then
+            printf "(ok) "
+        else
+            printf "(error) "
+        fi
+
+        printf "in %d seconds (%d:%02d:%02d)\n\n" \
             $((SECS)) $((SECS/3600)) $((SECS%3600/60)) $((SECS%60))
 
         if [[ -n $FILTERLNK ]]; then
@@ -304,7 +310,7 @@ exit_handler() {
                 printf "\n--%s--\n" "$MIMESTR"
             } | mail -a "$MIMEHDR" -s "${SUBJECT}" "${MAILTO}"
         else
-            cat
+            grep -vE "^\*+\ Mark$"
         fi
     }
 }
@@ -335,17 +341,12 @@ TODO=()
 [[ $MONTHLY = y && $NMONTHS -gt 0 ]] && TODO+=(monthly "$NMONTHS")
 [[ $YEARLY = y && $NYEARS -gt 0 ]]   && TODO+=(yearly "$NYEARS")
 
-log -l -t "Starting backup."
-log "Hostname: $(hostname)"
-log "Operating System: $(uname -sr) on $(uname -m)"
-log "Bash version: ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}.${BASH_VERSINFO[2]}"
-log "Config : ${CONFIG}"
-log "Src dir: ${SOURCEDIR}"
-log "Dst dir: ${SERVER}:${DESTDIR}"
-log "Actions: ${TODO[*]}"
-# check for available gzip and uuencode
+log -l -t "Starting $CMDNAME"
+log "bash version: ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}.${BASH_VERSINFO[2]}"
+
+# check availability of necessary commands
 declare -a cmdavail=()
-for cmd in gzip uuencode; do
+for cmd in gzip uuencode mail rsync; do
     log -n "Checking for $cmd... "
     if type -p "$cmd" > /dev/null; then
         log "ok"
@@ -355,9 +356,16 @@ for cmd in gzip uuencode; do
     fi
 done
 if (( ${#cmdavail[@]} )); then
-    log -s "Fatal. Please install the following: ${cmdavail[*]}."
+    log -s "Fatal. Please install the following programs: ${cmdavail[*]}."
     error_handler $LINENO 1
 fi
+
+log "Hostname: $(hostname)"
+log "Operating System: $(uname -sr) on $(uname -m)"
+log "Config : ${CONFIG}"
+log "Src dir: ${SOURCEDIR}"
+log "Dst dir: ${SERVER}:${DESTDIR}"
+log "Actions: ${TODO[*]}"
 
 log -s "Mark"                   # to separate email body
 
