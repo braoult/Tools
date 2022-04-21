@@ -355,7 +355,7 @@ for cmd in gzip uuencode; do
     fi
 done
 if (( ${#cmdavail[@]} )); then
-    log -s "Fatal. Please install the followine: ${cmdavail[*]}."
+    log -s "Fatal. Please install the following: ${cmdavail[*]}."
     error_handler $LINENO 1
 fi
 
