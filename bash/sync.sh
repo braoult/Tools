@@ -306,7 +306,7 @@ exit_handler() {
                 printf "Content-Transfer-Encoding: base64\n"
                 printf 'Content-Disposition: attachment; filename="sync.log.txt.gz"\n'
                 printf '\n'
-                gzip | uuencode -m "dummy" | sed '1d; $d'
+                gzip | base64
                 printf "\n--%s--\n" "$MIMESTR"
             } | mail -a "$MIMEHDR" -s "${SUBJECT}" "${MAILTO}"
         else
@@ -346,7 +346,7 @@ log "bash version: ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}.${BASH_VERSINFO[2]}"
 
 # check availability of necessary commands
 declare -a cmdavail=()
-for cmd in gzip uuencode mail rsync; do
+for cmd in gzip base64 mail rsync; do
     log -n "Checking for $cmd... "
     if type -p "$cmd" > /dev/null; then
         log "ok"
@@ -360,6 +360,7 @@ if (( ${#cmdavail[@]} )); then
     error_handler $LINENO 1
 fi
 
+log ""
 log "Hostname: $(hostname)"
 log "Operating System: $(uname -sr) on $(uname -m)"
 log "Config : ${CONFIG}"
