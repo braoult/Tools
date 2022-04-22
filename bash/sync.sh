@@ -48,12 +48,14 @@
 #       -v
 #          adds sub-tasks information, with timestamps.
 #       -D
-#          by default, this script will re-route all outputs (stdout and stderr)
+#          by default, this script re-routes all outputs (stdout and stderr)
 #          to a temporary file after basic initialization (mainly options
 #          checks and configuration file evaluation), so that we can format
 #          the output before displaying or mailing it.
 #          This option disables this redirection. It is useful (together with
 #          bash's -x option) when some errors are difficult to track.
+#       -Z
+#          activate email attachment compression (with gzip).
 #
 # GENERAL
 #       Ensure your ssh setup is correct: You must be able to ssh the target
@@ -124,6 +126,7 @@ NUMID=""                        # (-u) use numeric IDs
 #VERBOSE=0                       # TODO: (-v) logs level (0/1)
 DEBUG=n                         # (-D) debug: no I/O redirect (y/n)
 MAILTO=${MAILTO:-""}            # (-n) mail recipient. -n sets it to ""
+ZIPMAIL="cat"                   # (-Z) zip mail attachment
 
 # options not available on command line, but settable in config  file.
 NYEARS=3                        # keep # years (int)
@@ -155,13 +158,13 @@ STARTTIME=$(date +%s)           # time since epoch in seconds
 CMDNAME=${0##*/}
 
 usage () {
-    printf "usage: %s [-ymwdnfrzuD] config-file\n" "$CMDNAME"
+    printf "usage: %s [-ymwdnfrzuDZ] config-file\n" "$CMDNAME"
     exit 1
 }
 
 # command-line options parsing.
 OPTIND=1
-while getopts ymwdfrnzuD todo
+while getopts ymwdfrnzuDZ todo
 do
     case "${todo}" in
         y)  YEARLY=y;;
@@ -174,6 +177,7 @@ do
         z)  COMPRESS=-y;;       # rsync compression. Depends on net/CPU perfs
         u)  NUMID="--numeric-ids";;
         D)  DEBUG=y;;
+        Z)  ZIPMAIL="gzip";;
         *)  usage;;
     esac
 done
@@ -302,11 +306,16 @@ exit_handler() {
                 done
 
                 printf "\n--%s\n" "$MIMESTR"
-                printf "Content-Type: application/gzip\n"
+                if [[ "$ZIPMAIL" == cat ]]; then
+                    printf "Content-Type: text/plain\n"
+                    printf 'Content-Disposition: attachment; filename="sync-log.txt"\n'
+                else
+                    printf "Content-Type: application/gzip\n"
+                    printf 'Content-Disposition: attachment; filename="sync-log.txt.gz"\n'
+                fi
                 printf "Content-Transfer-Encoding: base64\n"
-                printf 'Content-Disposition: attachment; filename="sync.log.txt.gz"\n'
                 printf '\n'
-                gzip | base64
+                $ZIPMAIL | base64
                 printf "\n--%s--\n" "$MIMESTR"
             } | mail -a "$MIMEHDR" -s "${SUBJECT}" "${MAILTO}"
         else
