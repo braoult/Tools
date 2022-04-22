@@ -58,8 +58,6 @@
 #          activate email attachment compression (with gzip).
 #
 # GENERAL
-#       Ensure your ssh setup is correct: You must be able to ssh the target
-#       machine without password.
 #       You should avoid modifying variables in this script.
 #       Instead, use the configuration file, whenever possible.
 #
@@ -68,6 +66,19 @@
 #
 #       By default, the output is displayed (or mailed) when the script exits.
 #       The -D option allows to get real-time output.
+#
+# PREREQUISITES
+#       The following must be installed, configured, and within your PATH :
+#       ssh
+#          Ensure your ssh setup is correct: You must be able to ssh the target
+#          machine without password.
+#       sendmail/postfix (or any MTA providing the sendmail command)
+#          Your MTA must be properly configured to send emails. For example
+#          you should receive an email with the following command :
+#             echo "Subject: sendmail test" | sendmail -v youremail@example.com
+#
+#       Additionnaly, you will also need the "uuidgen", "gzip" and "base64"
+#       utilities.
 #
 # CONFIGURATION FILE
 #       TODO: Write documentation. See example (sync-conf-example.sh).
@@ -291,9 +302,15 @@ exit_handler() {
     } |
     {
         if [[ -n $MAILTO ]]; then
-            MIMESTR="FEDCBA987654321"
-            MIMEHDR="Content-Type: multipart/mixed; boundary=\"$MIMESTR\""
             {
+                MIMESTR=$(uuidgen)
+
+                # email header
+                printf "Subject: %s\n" "${SUBJECT}"
+                printf "MIME-Version: 1.0\n"
+                printf 'Content-Type: multipart/mixed; boundary="%s"\n' "$MIMESTR"
+                printf "\n"
+
                 # We write a short information in email's body
                 printf "\n--%s\n" "$MIMESTR"
                 printf 'Content-Type: text/plain; charset=UTF-8\n'
@@ -307,7 +324,7 @@ exit_handler() {
 
                 printf "\n--%s\n" "$MIMESTR"
                 if [[ "$ZIPMAIL" == cat ]]; then
-                    printf "Content-Type: text/plain\n"
+                    printf 'Content-Type: text/plain; charset=UTF-8\n'
                     printf 'Content-Disposition: attachment; filename="sync-log.txt"\n'
                 else
                     printf "Content-Type: application/gzip\n"
@@ -317,7 +334,7 @@ exit_handler() {
                 printf '\n'
                 $ZIPMAIL | base64
                 printf "\n--%s--\n" "$MIMESTR"
-            } | mail -a "$MIMEHDR" -s "${SUBJECT}" "${MAILTO}"
+            } | sendmail -i -- "${MAILTO}"
         else
             grep -vE "^\*+\ Mark$"
         fi
@@ -355,7 +372,7 @@ log "bash version: ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}.${BASH_VERSINFO[2]}"
 
 # check availability of necessary commands
 declare -a cmdavail=()
-for cmd in gzip base64 mail rsync; do
+for cmd in rsync gzip base64 sendmail uuidgen; do
     log -n "Checking for $cmd... "
     if type -p "$cmd" > /dev/null; then
         log "ok"
