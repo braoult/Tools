@@ -77,8 +77,7 @@
 #          you should receive an email with the following command :
 #             echo "Subject: sendmail test" | sendmail -v youremail@example.com
 #
-#       Additionnaly, you will also need the "uuidgen", "gzip" and "base64"
-#       utilities.
+#       Additionnaly, you will also need the "base64" and "gzip" utilities.
 #
 # CONFIGURATION FILE
 #       TODO: Write documentation. See example (sync-conf-example.sh).
@@ -278,7 +277,7 @@ exit_handler() {
         exec 0<<<""             # force empty input for the following
     fi
 
-    SECS=$(($(date +%s)-STARTTIME))
+    SECS=$(( $(date +%s) - STARTTIME ))
 
     # Warning: no logs allowed here (before next braces), as stdout is no
     # more handled the final way.
@@ -303,7 +302,7 @@ exit_handler() {
     {
         if [[ -n $MAILTO ]]; then
             {
-                MIMESTR=$(uuidgen)
+                MIMESTR="FEDCBA_0987654321"
 
                 # email header
                 printf "Subject: %s\n" "${SUBJECT}"
@@ -316,23 +315,30 @@ exit_handler() {
                 printf 'Content-Type: text/plain; charset=UTF-8\n'
                 printf '\n'
 
-                # send first lines in message body (until the mark line)
+                # send first lines in message body (until the mark line or EOF)
+                has_mark_line=0
                 while read -r line; do
-                    [[ $line =~ ^\*+\ Mark$ ]] && break
+                    if [[ $line =~ ^\*+\ Mark$ ]]; then
+                        has_mark_line=1
+                        break
+                    fi
                     printf "%s\n" "$line"
                 done
 
-                printf "\n--%s\n" "$MIMESTR"
-                if [[ "$ZIPMAIL" == cat ]]; then
-                    printf 'Content-Type: text/plain; charset=UTF-8\n'
-                    printf 'Content-Disposition: attachment; filename="sync-log.txt"\n'
-                else
-                    printf "Content-Type: application/gzip\n"
-                    printf 'Content-Disposition: attachment; filename="sync-log.txt.gz"\n'
+                # we prepare attachment only if a mark line was found
+                if ((  has_mark_line == 1 )); then
+                    printf "\n--%s\n" "$MIMESTR"
+                    if [[ "$ZIPMAIL" == cat ]]; then
+                        printf 'Content-Type: text/plain; charset=UTF-8\n'
+                        printf 'Content-Disposition: attachment; filename="sync-log.txt"\n'
+                    else
+                        printf "Content-Type: application/gzip\n"
+                        printf 'Content-Disposition: attachment; filename="sync-log.txt.gz"\n'
+                    fi
+                    printf "Content-Transfer-Encoding: base64\n"
+                    printf '\n'
+                    $ZIPMAIL | base64
                 fi
-                printf "Content-Transfer-Encoding: base64\n"
-                printf '\n'
-                $ZIPMAIL | base64
                 printf "\n--%s--\n" "$MIMESTR"
             } | sendmail -i -- "${MAILTO}"
         else
@@ -370,9 +376,17 @@ TODO=()
 log -l -t "Starting $CMDNAME"
 log "bash version: ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}.${BASH_VERSINFO[2]}"
 
+log ""
+log "Hostname: $(hostname)"
+log "Operating System: $(uname -sr) on $(uname -m)"
+log "Config : ${CONFIG}"
+log "Src dir: ${SOURCEDIR}"
+log "Dst dir: ${SERVER}:${DESTDIR}"
+log "Actions: ${TODO[*]}"
+
 # check availability of necessary commands
 declare -a cmdavail=()
-for cmd in rsync gzip base64 sendmail uuidgen; do
+for cmd in rsync gzip base64 sendmail; do
     log -n "Checking for $cmd... "
     if type -p "$cmd" > /dev/null; then
         log "ok"
@@ -385,14 +399,6 @@ if (( ${#cmdavail[@]} )); then
     log -s "Fatal. Please install the following programs: ${cmdavail[*]}."
     error_handler $LINENO 1
 fi
-
-log ""
-log "Hostname: $(hostname)"
-log "Operating System: $(uname -sr) on $(uname -m)"
-log "Config : ${CONFIG}"
-log "Src dir: ${SOURCEDIR}"
-log "Dst dir: ${SERVER}:${DESTDIR}"
-log "Actions: ${TODO[*]}"
 
 log -s "Mark"                   # to separate email body
 
