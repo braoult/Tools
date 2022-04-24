@@ -162,10 +162,10 @@ function aftersync () {
 # Some variables were moved into the code (example: in the log() function),
 # for practical reasons, the absence of associative arrays being one of them.
 LOCKED=n                        # indicates if we created lock file.
-SUBJECT="${0##*/} ${*##*/}"     # mail subject (removes paths)
+CMDNAME=${0##*/}                # script name
+SUBJECT="$CMDNAME ${*##*/}"     # mail subject
 ERROR=0                         # set by error_handler when called
 STARTTIME=$(date +%s)           # time since epoch in seconds
-CMDNAME=${0##*/}
 
 usage () {
     printf "usage: %s [-ymwdnfrzuDZ] config-file\n" "$CMDNAME"
@@ -196,8 +196,8 @@ done
 shift $((OPTIND - 1))
 (( $# != 1 )) && usage
 CONFIG="$1"
-if [[ ! -f "$CONFIG" ]]; then
-    echo "No $CONFIG file."
+if [[ ! -r "$CONFIG" ]]; then
+    printf "%s: Canot open $CONFIG file. Exiting."
     usage
 fi
 # shellcheck source=/dev/null
