@@ -383,6 +383,10 @@ log "Config : ${CONFIG}"
 log "Src dir: ${SOURCEDIR}"
 log "Dst dir: ${SERVER}:${DESTDIR}"
 log "Actions: ${TODO[*]}"
+log -n "Mail recipient: "
+[[ -n $MAILTO ]] && log "$MAILTO" || log "<unset>"
+# shellcheck disable=SC2015
+log -n "Compression:" && [[ $ZIPMAIL = zip ]] && log "gzip" || log "none"
 
 # check availability of necessary commands
 declare -a cmdavail=()
