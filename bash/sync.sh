@@ -55,7 +55,8 @@
 #          This option disables this redirection. It is useful (together with
 #          bash's -x option) when some errors are difficult to track.
 #       -Z
-#          activate email attachment compression (with gzip).
+#          By default, if gzip utility is available, the log attachment is
+#          compressed. This option will prevent any compression.
 #
 # GENERAL
 #       You should avoid modifying variables in this script.
@@ -136,7 +137,7 @@ NUMID=""                        # (-u) use numeric IDs
 #VERBOSE=0                       # TODO: (-v) logs level (0/1)
 DEBUG=n                         # (-D) debug: no I/O redirect (y/n)
 MAILTO=${MAILTO:-""}            # (-n) mail recipient. -n sets it to ""
-ZIPMAIL="cat"                   # (-Z) zip mail attachment
+ZIPMAIL="gzip"                  # (-Z) zip mail attachment
 
 # options not available on command line, but settable in config  file.
 NYEARS=3                        # keep # years (int)
@@ -187,7 +188,7 @@ do
         z)  COMPRESS=-y;;       # rsync compression. Depends on net/CPU perfs
         u)  NUMID="--numeric-ids";;
         D)  DEBUG=y;;
-        Z)  ZIPMAIL="gzip";;
+        Z)  ZIPMAIL="cat";;
         *)  usage;;
     esac
 done
@@ -305,6 +306,8 @@ exit_handler() {
                 MIMESTR="FEDCBA_0987654321"
 
                 # email header
+                printf "To: %s\n" "$MAILTO"
+                #printf "From: %s" "$MAILTO"
                 printf "Subject: %s\n" "${SUBJECT}"
                 printf "MIME-Version: 1.0\n"
                 printf 'Content-Type: multipart/mixed; boundary="%s"\n' "$MIMESTR"
@@ -340,7 +343,7 @@ exit_handler() {
                     $ZIPMAIL | base64
                 fi
                 printf "\n--%s--\n" "$MIMESTR"
-            } | sendmail -i -- "${MAILTO}"
+            } | sendmail -it
         else
             grep -vE "^\*+\ Mark$"
         fi
@@ -395,14 +398,21 @@ for cmd in rsync gzip base64 sendmail; do
     if type -p "$cmd" > /dev/null; then
         log "ok"
     else
+        if [[ "$cmd" = "gzip" ]]; then
+            log "NOK (ignored, disabling compression)"
+            ZIPMAIL="cat"
+            continue
+        fi
         log "NOK"
         cmdavail+=("$cmd")
     fi
 done
+
 if (( ${#cmdavail[@]} )); then
     log -s "Fatal. Please install the following programs: ${cmdavail[*]}."
     error_handler $LINENO 1
 fi
+unset cmdavail
 
 log -s "Mark"                   # to separate email body
 
