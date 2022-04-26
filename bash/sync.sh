@@ -395,7 +395,7 @@ log -n "Compression:" && [[ $ZIPMAIL = zip ]] && log "gzip" || log "none"
 declare -a cmdavail=()
 for cmd in rsync gzip base64 sendmail; do
     log -n "Checking for $cmd... "
-    if type -p "$cmd" > /dev/null; then
+    if type -P "$cmd" > /dev/null; then
         log "ok"
     else
         if [[ "$cmd" = "gzip" ]]; then
