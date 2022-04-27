@@ -23,37 +23,44 @@
 #       CONFIG file, which is mandatory.
 #
 # OPTIONS
-#       -y, -m, -w, -d
-#          yearly/monthly/weekly/daily backup. If none of these options is set,
-#          and none of the corresponding variables set to "y" in configuration
+#       -a PERIOD
+#          Will perform PERIOD backups. PERIOD is a comma-separated string
+#          containing ont of more of 'y', 'm', 'w', and 'd', for respectively
+#          yearly, monthly, weekly and daily backups.
+#          Multiple -a may appear. For example, the following have the same
+#          meaning (make a daily, monthly, and yearly backup) :
+#              -a m -a y -a d
+#              -ad,m -ay
+#          If this option is not used, and none of the equivalent variables
+#          (YEARLY, MONTHY, WEEKLY, DAILY) is set to "y" in configuration
 #          file, the script will determine itself what should be done,
 #          depending on the current day or date: daily backup every day,
 #          weekly every sunday, monthly every first day of month, and yearly
 #          every Jan 1st.
-#       -n
-#          do not send mail report (which is the default if MAILTO environment
-#          is set). Practically, this option only unsets MAILTO.
-#       -f
-#          filter some rsync output, such as hard and soft links, dirs, etc.
-#       -r
-#          resume an interrupted transfer (rsync --partial option). It should
-#          be safe to use this option, as it has no effect in usual case.
-#       -z
-#          enable rsync compression. Should be used when the transport is more
-#          expensive than CPU (typically slow connections).
-#       -u
-#          will use numeric IDs (uid and gid) instead of usernames/groupnames.
-#          This could be preferable in case of backup, to avoid any issue when
-#          getting back the file (for instance via a mount).
-#       -v
-#          adds sub-tasks information, with timestamps.
 #       -D
-#          by default, this script re-routes all outputs (stdout and stderr)
+#          By default, this script re-routes all outputs (stdout and stderr)
 #          to a temporary file after basic initialization (mainly options
 #          checks and configuration file evaluation), so that we can format
 #          the output before displaying or mailing it.
 #          This option disables this redirection. It is useful (together with
 #          bash's -x option) when some errors are difficult to track.
+#       -f
+#          Filter some rsync output, such as hard and soft links, dirs, etc.
+#       -n
+#          Do not send mail report (which is the default if MAILTO environment
+#          is set). Practically, this option only unsets MAILTO.
+#       -r
+#          Resume an interrupted transfer (rsync --partial option). It should
+#          be safe to use this option, as it has no effect in usual case.
+#       -u
+#          Use numeric IDs (UID and GID) instead of usernames/groupnames. This
+#          could be preferable in case of backup, to avoid any issue when
+#          getting back the file (for instance via a mount).
+#       -v
+#          Add sub-tasks information, with timestamps.
+#       -z
+#          Enable rsync compression. Should be used when the transport is more
+#          expensive than CPU (typically slow connections).
 #       -Z
 #          By default, if gzip utility is available, the log attachment is
 #          compressed. This option will prevent any compression.
@@ -100,7 +107,6 @@
 #       - replace y/n values with empty/not-empty. A step to avoid config file
 #       - set default compress value on local/non-local. Step to avoid config
 #         file
-#       - replace y/m/w/d with numerical values ? Step to avoid config file
 #       - manage more errors (instead of relying on traps)
 #       - the deletion of oldest backup directories takes ages. This could be
 #         avoided (for example we could move them to a temp dir and remove it
@@ -113,10 +119,10 @@
 #         destination from the previous backup, and perform a usual backup
 #         on this new directory. This should be easy, but my guess is that
 #         it could be slower (1 first pass on server is added before the
-#         normal backup.
-#       - replace getopts(1) to have a better options parsing. GNU's getopt(1)
-#         could be an option, but not available everywhere (for example on
-#         MacOS). Likely impossible to keep this script portable.
+#         normal backup).
+#       - replace bash's getopts for a better options parsing tool, such as
+#         GNU's getopt(1) could be an option, but not available everywhere
+#         (for example on MacOS). Likely impossible to keep this script portable.
 #
 # AUTHOR
 #       Bruno Raoult.
@@ -126,10 +132,10 @@
 #########################  options default values.
 # These ones can be set by command-line.
 # They can also be overwritten in configuration file (prefered option).
-YEARLY=n                        # (-y) yearly backup (y/n)
-MONTHLY=n                       # (-m) monthly backup (y/n)
-WEEKLY=n                        # (-w) weekly backup (y/n)
-DAILY=n                         # (-d) daily backup (y/n)
+YEARLY=n                        # (-ay) yearly backup (y/n)
+MONTHLY=n                       # (-am) monthly backup (y/n)
+WEEKLY=n                        # (-aw) weekly backup (y/n)
+DAILY=n                         # (-ad) daily backup (y/n)
 FILTERLNK=n                     # (-f) rsync logs filter: links, dirs... (y/n)
 RESUME=n                        # (-r) resume backup (y/n)
 COMPRESS=""                     # (-z) rsync compression
@@ -169,27 +175,35 @@ ERROR=0                         # set by error_handler when called
 STARTTIME=$(date +%s)           # time since epoch in seconds
 
 usage () {
-    printf "usage: %s [-ymwdnfrzuDZ] config-file\n" "$CMDNAME"
+    printf "usage: %s [-a PERIOD][-DfnruvzZ] config-file\n" "$CMDNAME"
     exit 1
 }
 
 # command-line options parsing.
 OPTIND=1
-while getopts ymwdfrnzuDZ todo
+while getopts a:DfnruvzZ todo
 do
     case "${todo}" in
-        y)  YEARLY=y;;
-        m)  MONTHLY=y;;
-        w)  WEEKLY=y;;
-        d)  DAILY=y;;
-        f)  FILTERLNK=y;;
-        r)  RESUME=y;;
-        n)  MAILTO="";;
-        z)  COMPRESS=-y;;       # rsync compression. Depends on net/CPU perfs
-        u)  NUMID="--numeric-ids";;
-        D)  DEBUG=y;;
-        Z)  ZIPMAIL="cat";;
-        *)  usage;;
+        a)  read -ra period <<< "${OPTARG//,/ }"
+            for p in "${period[@]}"; do
+                case "$p" in
+                    d) DAILY=y;;
+                    w) WEEKLY=y;;
+                    m) MONTHLY=y;;
+                    y) YEARLY=y;;
+                    *) printf '%s: unknown period "%s"\n' "$CMDNAME" "$p"
+                       usage
+                esac
+            done
+            ;;
+        f) FILTERLNK=y;;
+        r) RESUME=y;;
+        n) MAILTO="";;
+        z) COMPRESS=-y;;       # rsync compression. Depends on net/CPU perfs
+        u) NUMID="--numeric-ids";;
+        D) DEBUG=y;;
+        Z) ZIPMAIL="cat";;
+        *) usage;;
     esac
 done
 # Now check remaining argument (configuration file), which should be unique,
@@ -198,7 +212,7 @@ shift $((OPTIND - 1))
 (( $# != 1 )) && usage
 CONFIG="$1"
 if [[ ! -r "$CONFIG" ]]; then
-    printf "%s: Canot open $CONFIG file. Exiting."
+    printf "%s: Cannot open $CONFIG file. Exiting." "$CMDNAME"
     usage
 fi
 # shellcheck source=/dev/null
@@ -214,7 +228,7 @@ if ! [[ "${DAILY}${WEEKLY}${MONTHLY}${YEARLY}" =~ .*y.* ]]; then
     DAILY=y
 fi
 
-# set final variables values
+# This will prevent two syncs running simultaneously
 LOCKFILE=".sync-${SERVER}-${CONFIG##*/}.lock"
 
 # log function
@@ -370,11 +384,12 @@ if ! cd ${SOURCEDIR}; then
 fi
 
 # prepare list of backups, such as "daily 7 weekly 4", etc...
+# the order is important.
 TODO=()
-[[ $DAILY = y && $NDAYS -gt 0 ]]     && TODO+=(daily "$NDAYS")
-[[ $WEEKLY = y && $NWEEKS -gt 0 ]]   && TODO+=(weekly "$NWEEKS")
-[[ $MONTHLY = y && $NMONTHS -gt 0 ]] && TODO+=(monthly "$NMONTHS")
-[[ $YEARLY = y && $NYEARS -gt 0 ]]   && TODO+=(yearly "$NYEARS")
+[[ $DAILY   = y ]] && (( NDAYS   > 0 )) && TODO+=(daily   "$NDAYS")
+[[ $WEEKLY  = y ]] && (( NWEEKS  > 0 )) && TODO+=(weekly  "$NWEEKS")
+[[ $MONTHLY = y ]] && (( NMONTHS > 0 )) && TODO+=(monthly "$NMONTHS")
+[[ $YEARLY  = y ]] && (( NYEARS  > 0 )) && TODO+=(yearly  "$NYEARS")
 
 log -l -t "Starting $CMDNAME"
 log "bash version: ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}.${BASH_VERSINFO[2]}"
@@ -387,7 +402,8 @@ log "Src dir: ${SOURCEDIR}"
 log "Dst dir: ${SERVER}:${DESTDIR}"
 log "Actions: ${TODO[*]}"
 log -n "Mail recipient: "
-[[ -n $MAILTO ]] && log "$MAILTO" || log "<unset>"
+# shellcheck disable=SC2015
+[[ -n "$MAILTO" ]] && log "$MAILTO" || log "<unset>"
 # shellcheck disable=SC2015
 log -n "Compression:" && [[ $ZIPMAIL = zip ]] && log "gzip" || log "none"
 
