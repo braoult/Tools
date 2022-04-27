@@ -150,7 +150,7 @@ NYEARS=3                        # keep # years (int)
 NMONTHS=12                      # keep # months (int)
 NWEEKS=4                        # keep # weeks (int)
 NDAYS=7                         # keep # days (int)
-RSYNCOPTS=""                    # other rsync options
+declare -a RSYNCOPTS=()         # other rsync options
 SOURCEDIR="."                   # source dir
 DESTDIR="."                     # destination dir
 MODIFYWINDOW=1                  # accuracy for mod time comparison
@@ -213,7 +213,7 @@ shift $((OPTIND - 1))
 CONFIG="$1"
 if [[ ! -r "$CONFIG" ]]; then
     printf "%s: Cannot open $CONFIG file. Exiting." "$CMDNAME"
-    usage
+    exit 1
 fi
 # shellcheck source=/dev/null
 source "$CONFIG"
@@ -288,7 +288,6 @@ exit_handler() {
         exec 1<&3 3>&- 0<"$TMPFILE"
         rm -f "$TMPFILE"
     else
-        echo 222
         exec 0<<<""             # force empty input for the following
     fi
 
@@ -401,6 +400,9 @@ log "Config : ${CONFIG}"
 log "Src dir: ${SOURCEDIR}"
 log "Dst dir: ${SERVER}:${DESTDIR}"
 log "Actions: ${TODO[*]}"
+log "Filter: $FILTER"
+log "Rsync additional options (${#RSYNCOPTS[@]}): ${#RSYNCOPTS[@]}"
+
 log -n "Mail recipient: "
 # shellcheck disable=SC2015
 [[ -n "$MAILTO" ]] && log "$MAILTO" || log "<unset>"
@@ -529,11 +531,10 @@ do
         #   - "vanished file" (exit code 24).
         #   - others?
         status=0
-        # shellcheck disable=SC2086
         echorun rsync \
             -aHixv \
             "${FILTER}" \
-            ${RSYNCOPTS} \
+            "${RSYNCOPTS[@]}" \
             ${COMPRESS} \
             ${NUMID} \
             --delete \

@@ -29,10 +29,12 @@ NDAYS=7
 
 # FILTER can be used to filter directories to include/exclude. See rsync(1) for
 # details.
-FILTER=--filter="dir-merge .rsync-filter-br"
+FILTER="--filter=dir-merge .rsync-filter-br"
 
-# other rsync options
-RSYNCOPTS=""
+# other rsync options. It must be an array. For example, the following line
+# is equivalent to the FILTER line above:
+# RSYNCOPTS=( "--filter=dir-merge .rsync-filter-br" )
+RSYNCOPTS=()
 
 # functions run just before and after the rsync. Could be useful to create
 # database dumps, etc...
