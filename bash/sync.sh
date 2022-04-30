@@ -85,7 +85,11 @@
 #          you should receive an email with the following command :
 #             echo "Subject: sendmail test" | sendmail -v youremail@example.com
 #
-#       Additionnaly, you will also need the "base64" and "gzip" utilities.
+#       Additionnaly, you will also need the "base64" and "gzip" utilities. If
+#       you run this script via cron(8), remember that PATH is different. For
+#       example, on some systems, cron's default PATH is "/usr/bin:/bin". If
+#       sendmail is in /usr/sbin on your system, you will have to change PATH
+#       in your crontab.
 #
 # CONFIGURATION FILE
 #       TODO: Write documentation. See example (sync-conf-example.sh).
