@@ -630,7 +630,7 @@ mariadb_maybe_start
 
 # grub install
 if [[ $GRUB == ask ]]; then
-    if ! yesno "install grub on %s (root: %s)" "$GRUB_DEV" "$GRUB_ROOT"; then
+    if ! yesno "install grub on %s (root label: %s)" "$DST" "$DSTROOTLABEL"; then
         GRUB=no
     fi
 fi
