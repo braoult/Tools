@@ -181,7 +181,7 @@ Options:
       -y, --yes            Will answer 'yes' to any question
 
 SRC and DST have strong constraints on partitions schemes and naming.
-Type '$CMD --man" for more details"
+Type '$CMD --man' for more details"
 _EOF
     return 0
 }
