@@ -163,25 +163,24 @@ Duplicate SRC (or live system) disk partitions to DST disk partitions.
 
 Options:
       -a, --autofs=DIR     autofs "LABEL-based" directory. Default is '/mnt'.
-      -c, --copy=ACTION    do partitions copies (ACTION='yes', 'no, 'ask).
+      -c, --copy=ACTION    do partitions copies (ACTION='yes', 'no', 'ask').
                            Default is 'ask'
       -d, --dry-run        dry-run: nothing will be written to disk
-      -f, --fstab=ACTION   adjust fstab on destination disk ('yes', 'no, 'ask')
-                           Default is 'ask'
-      -g, --grub=ACTION    install grub on destination disk ('yes', 'no, 'ask')
-                           Default is 'ask'
+      -f, --fstab=ACTION   adjust fstab on destination disk ('yes', 'no',
+                           'ask'). Default is 'ask'
+      -g, --grub=ACTION    install grub on destination disk ('yes', 'no',
+                           'ask'). Default is 'ask'
       -h, --help           this help
-      -m, --man            display a "man-like" page and exit
+      -m, --man            display a man-like page and exit
       -M, --mariadb=ACTION stop and restart mysql/mariadb server before and
-                           after copies ('yes', 'no', 'ask').
-                           Default is 'ask'
+                           after copies ('yes', 'no', 'ask'). Default is 'ask'
       -n, --no             Will answer 'no' to any question
       -r, --root=PARTNUM   root partition number on SRC device
                            mandatory if and only if SRC is provided
       -y, --yes            Will answer 'yes' to any question
 
 SRC and DST have strong constraints on partitions schemes and naming.
-Type '$CMD --man' for more details"
+Type '$CMD --man' for more details.
 _EOF
     return 0
 }
