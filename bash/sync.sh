@@ -21,16 +21,20 @@
 #       Performs a backup to a local or remote destination, keeping different
 #       versions (daily, weekly, monthly, yearly). All options can be set in
 #       CONFIG file, which is mandatory.
+#       The synchronization is make with rsync(1), and only files changed or
+#       modified are actually copied; files which are identical with previous
+#       backup are hard-linked to previous one.
 #
 # OPTIONS
 #       -a PERIOD
-#          Will perform PERIOD backups. PERIOD is a comma-separated string
-#          containing ont of more of 'y', 'm', 'w', and 'd', for respectively
+#          Indicate which backup(s) should be done. PERIOD is a string composed
+#          of one or more of 'y', 'm', 'w', and 'd', indicating respectively
 #          yearly, monthly, weekly and daily backups.
-#          Multiple -a may appear. For example, the following have the same
-#          meaning (make a daily, monthly, and yearly backup) :
+#          Multiple -a may appear. For example, if we wish to perform a daily,
+#          monthly, and yearly backup, we can use syntax like :
 #              -a m -a y -a d
-#              -ad,m -ay
+#              -adm -ay
+#              -a ymd
 #          If this option is not used, and none of the equivalent variables
 #          (YEARLY, MONTHY, WEEKLY, DAILY) is set to "y" in configuration
 #          file, the script will determine itself what should be done,
@@ -57,7 +61,8 @@
 #          could be preferable in case of backup, to avoid any issue when
 #          getting back the file (for instance via a mount).
 #       -v
-#          Add sub-tasks information, with timestamps.
+#          Add sub-tasks information, with timestamps. This option is currently
+#          not implemented.
 #       -z
 #          Enable rsync compression. Should be used when the transport is more
 #          expensive than CPU (typically slow connections).
@@ -85,11 +90,12 @@
 #          you should receive an email with the following command :
 #             echo "Subject: sendmail test" | sendmail -v youremail@example.com
 #
-#       Additionnaly, you will also need the "base64" and "gzip" utilities. If
-#       you run this script via cron(8), remember that PATH is different. For
-#       example, on some systems, cron's default PATH is "/usr/bin:/bin". If
-#       sendmail is in /usr/sbin on your system, you will have to change PATH
-#       in your crontab.
+#       Additionnaly, you will also need the "base64" and "gzip" utilities.
+#
+#       NOTE: If you run this script via cron(8), please remember that PATH is
+#       different. For example, on some systems, cron's default PATH is
+#       "/usr/bin:/bin". Should sendmail binary be in /usr/sbin on your system,
+#       you will have to change PATH in your crontab.
 #
 # CONFIGURATION FILE
 #       TODO: Write documentation. See example (sync-conf-example.sh).
@@ -133,7 +139,9 @@
 #
 #
 
-#########################  options default values.
+###############################################################################
+#########################  options default values
+###############################################################################
 # These ones can be set by command-line.
 # They can also be overwritten in configuration file (prefered option).
 YEARLY=n                        # (-ay) yearly backup (y/n)
@@ -162,106 +170,105 @@ MODIFYWINDOW=1                  # accuracy for mod time comparison
 # these 2 functions can be overwritten in data file, to run specific actions
 # just before and after the actual sync
 function beforesync () {
-    log calling default beforesync...
+    log "calling default beforesync..."
 }
 function aftersync () {
-    log calling default aftersync...
+    log "calling default aftersync..."
 }
 
 # internal variables, cannot (and *should not*) be changed unless you
 # understand exactly what you do.
 # Some variables were moved into the code (example: in the log() function),
 # for practical reasons, the absence of associative arrays being one of them.
-LOCKED=n                        # indicates if we created lock file.
 CMDNAME=${0##*/}                # script name
+PID=$$                          # current pricess PID
+LOCKED=n                        # indicates if we created lock file.
 SUBJECT="$CMDNAME ${*##*/}"     # mail subject
 ERROR=0                         # set by error_handler when called
 STARTTIME=$(date +%s)           # time since epoch in seconds
 
+###############################################################################
+#########################  helper functions
+###############################################################################
 usage () {
     printf "usage: %s [-a PERIOD][-DfnruvzZ] config-file\n" "$CMDNAME"
     exit 1
 }
-
-# command-line options parsing.
-OPTIND=1
-while getopts a:DfnruvzZ todo
-do
-    case "${todo}" in
-        a)  read -ra period <<< "${OPTARG//,/ }"
-            for p in "${period[@]}"; do
-                case "$p" in
-                    d) DAILY=y;;
-                    w) WEEKLY=y;;
-                    m) MONTHLY=y;;
-                    y) YEARLY=y;;
-                    *) printf '%s: unknown period "%s"\n' "$CMDNAME" "$p"
-                       usage
-                esac
-            done
-            ;;
-        f) FILTERLNK=y;;
-        r) RESUME=y;;
-        n) MAILTO="";;
-        z) COMPRESS=-y;;       # rsync compression. Depends on net/CPU perfs
-        u) NUMID="--numeric-ids";;
-        D) DEBUG=y;;
-        Z) ZIPMAIL="cat";;
-        *) usage;;
-    esac
-done
-# Now check remaining argument (configuration file), which should be unique,
-# and read the file.
-shift $((OPTIND - 1))
-(( $# != 1 )) && usage
-CONFIG="$1"
-if [[ ! -r "$CONFIG" ]]; then
-    printf "%s: Cannot open $CONFIG file. Exiting." "$CMDNAME"
-    exit 1
-fi
-# shellcheck source=/dev/null
-source "$CONFIG"
-
-# we set backups to be done if none has been set yet (i.e. none is "y").
-# Note: we use the form +%-d to avoid zero padding.
-#       for bash, starting with 0 => octal => 08 is invalid
-if ! [[ "${DAILY}${WEEKLY}${MONTHLY}${YEARLY}" =~ .*y.* ]]; then
-    (( $(date +%u) == 7 )) && WEEKLY=y
-    (( $(date +%-d) == 1 )) && MONTHLY=y
-    (( $(date +%-d) == 1 && $(date +%-m) == 1 )) && YEARLY=y
-    DAILY=y
-fi
-
-# This will prevent two syncs running simultaneously
-LOCKFILE=".sync-${SERVER}-${CONFIG##*/}.lock"
 
 # log function
 # parameters:
 # -l, -s: long, or short prefix (default: none). Last one is used.
 # -t: timestamp
 # -n: no newline
+# This function accepts either a string, either a format string followed
+# by arguments :
+#   log -s "%s" "foo"
+#   log -s "foo"
 log() {
-    timestr=""
-    prefix=""
-    opt=y
-    newline=y
-    while [[ $opt = y ]]; do
-        case $1 in
-            -l) prefix=$(printf "*%.s" {1..30});;
-            -s) prefix=$(printf "*%.s" {1..5});;
-            -n) newline=n;;
-            -t) timestr=$(date "+%F %T%z - ");;
-            *) opt=n;;
+    local timestr="" prefix="" newline=y todo OPTIND
+    while getopts lsnt todo; do
+        case $todo in
+            l) prefix=$(printf "*%.s" {1..30})
+               ;;
+            s) prefix=$(printf "*%.s" {1..5})
+               ;;
+            n) newline=n
+               ;;
+            t) timestr=$(date "+%F %T%z ")
+               ;;
+            *) ;;
         esac
-        [[ $opt = y ]] && shift
     done
+    shift $((OPTIND - 1))
     [[ $prefix != "" ]] && printf "%s " "$prefix"
-    printf "%s%s" "$timestr" "$*"
-    [[ $newline = y ]] && echo
+    [[ $timestr != "" ]] && printf "%s" "$timestr"
+    # shellcheck disable=SC2059
+    printf "$@"
+    [[ $newline = y ]] && printf "\n"
     return 0
 }
 
-# After these basic initializations, errors will be managed by the
+# prints out and run a command. Used mainly for rsync debug.
+echorun () {
+    log "%s" "$*"
+    "$@"
+    return $?
+}
+
+# lock system
+lock_lock() {
+    local opid lock="$LOCKDIR/pid"
+    log -n "Setting lock: "
+    if [[ -r "$LOCKDIR" && -r "$lock" ]]; then
+        read -r opid < "$lock"
+        if ps -p "$opid" &> /dev/null; then
+            log "PID %d (in %s) still active. Exiting." "$opid" "$lock"
+            exit 0
+        fi
+        log "Stale lock file found (pid=%d), forcing unlock... " "$opid"
+        lock_unlock -f
+    fi
+    if ! mkdir "$LOCKDIR"; then
+        log "Cannot create lock file. Exiting."
+        error_handler $LINENO 1
+    fi
+    log "ok."
+    printf "%d\n" "$PID" >> "$lock"
+    LOCKED=y
+    return 0
+}
+
+lock_unlock() {
+    local force=n
+    [[ $# == 1 ]] && [[ $1 == -f ]] && force=y
+    if [[ "$force" = y || "$LOCKED" = y ]]; then
+        rm --verbose "$LOCKDIR"/pid
+        rm --dir --verbose "$LOCKDIR"
+    fi
+    return 0
+}
+
+# Error handler.After these basic initializations, errors will be managed by the
 # following handler. It is better to do this before the redirections below.
 error_handler() {
     ERROR=$2
@@ -269,14 +276,10 @@ error_handler() {
     exit "$ERROR"
 }
 
-trap 'error_handler $LINENO $?' ERR SIGHUP SIGINT SIGTERM
-
 exit_handler() {
     # we dont need lock file anymore (another backup could start from now).
-    log "exit_handler LOCKED=$LOCKED"
-    if [[ "$LOCKED" = y ]]; then
-        rm --dir --verbose "${LOCKFILE}"
-    fi
+    log "exit_handler LOCKED=%s" "$LOCKED"
+    lock_unlock
 
     if (( ERROR == 0 )); then
         SUBJECT="Successful $SUBJECT"
@@ -325,7 +328,7 @@ exit_handler() {
                 # email header
                 printf "To: %s\n" "$MAILTO"
                 #printf "From: %s" "$MAILTO"
-                printf "Subject: %s\n" "${SUBJECT}"
+                printf "Subject: %s\n" "$SUBJECT"
                 printf "MIME-Version: 1.0\n"
                 printf 'Content-Type: multipart/mixed; boundary="%s"\n' "$MIMESTR"
                 printf "\n"
@@ -366,6 +369,67 @@ exit_handler() {
         fi
     }
 }
+
+###############################################################################
+#########################  Options/Environment setup
+###############################################################################
+# command-line options parsing.
+OPTIND=1
+shopt -s extglob                # to parse "-a" option
+while getopts a:DfnruvzZ todo; do
+    case "$todo" in
+        a)  # we use US (Unit Separator, 0x1F, control-_) as separator
+            # next line will add US before each char (including 1st one)
+            IFS=$'\x1F' read -ra periods <<< "${OPTARG//?()/$'\x1F'}"
+            # we skip 1st (empty) ellement of array
+            for period in "${periods[@]:1}"; do
+                case "$period" in
+                    d) DAILY=y;;
+                    w) WEEKLY=y;;
+                    m) MONTHLY=y;;
+                    y) YEARLY=y;;
+                    *) printf '%s: unknown period "%s"\n' "$CMDNAME" "$period"
+                       usage
+                esac
+            done
+            ;;
+        f) FILTERLNK=y;;
+        r) RESUME=y;;
+        n) MAILTO="";;
+        z) COMPRESS=-y;;       # rsync compression. Depends on net/CPU perfs
+        u) NUMID="--numeric-ids";;
+        D) DEBUG=y;;
+        Z) ZIPMAIL="cat";;
+        *) usage;;
+    esac
+done
+# Now check remaining argument (configuration file), which should be unique,
+# and read the file.
+shift $((OPTIND - 1))
+(( $# != 1 )) && usage
+CONFIG="$1"
+LOCKDIR=".sync-$SERVER-${CONFIG##*/}.lock"
+
+if [[ ! -r "$CONFIG" ]]; then
+    printf "%s: Cannot open $CONFIG file. Exiting.\n" "$CMDNAME"
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "$CONFIG"
+
+# we set backups to be done if none has been set yet (i.e. none is "y").
+# Note: we use the form +%-d to avoid zero padding :
+# for bash, starting with 0 => octal => 08 is invalid
+if ! [[ "$DAILY$WEEKLY$MONTHLY$YEARLY" =~ .*y.* ]]; then
+    (( $(date +%u) == 7 )) && WEEKLY=y
+    (( $(date +%-d) == 1 )) && MONTHLY=y
+    (( $(date +%-d) == 1 && $(date +%-m) == 1 )) && YEARLY=y
+    DAILY=y
+fi
+
+# After these basic initializations, errors will be managed by the
+# following handler. It is better to do this before the redirections below.
+trap 'error_handler $LINENO $?' ERR SIGHUP SIGINT SIGTERM
 trap 'exit_handler' EXIT
 
 # standard descriptors redirection.
@@ -374,15 +438,15 @@ trap 'exit_handler' EXIT
 # such as ^C handling, etc... So we keep the keyboard available.
 if [[ $DEBUG = n ]]; then
     TMPFILE=$(mktemp /tmp/sync-log.XXXXXX)
-    exec 3<&1 >"${TMPFILE}"     # no more output on screen from now.
+    exec 3<&1 >"$TMPFILE"     # no more output on screen from now.
 fi
 exec 2>&1
-if [[ ! -d $SOURCEDIR ]]; then
-    log -s "Source directory (\"${SOURCEDIR}\") is not a valid directory."
+if [[ ! -d "$SOURCEDIR" ]]; then
+    log -s "Invalid source directory (%s)." "$SOURCEDIR"
     error_handler $LINENO 1
 fi
-if ! cd ${SOURCEDIR}; then
-    log -s "Cannot cd to \"${SOURCEDIR}\"."
+if ! cd "$SOURCEDIR"; then
+    log -s "Cannot cd to %s." "$SOURCEDIR"
     error_handler $LINENO 1
 fi
 
@@ -394,18 +458,17 @@ TODO=()
 [[ $MONTHLY = y ]] && (( NMONTHS > 0 )) && TODO+=(monthly "$NMONTHS")
 [[ $YEARLY  = y ]] && (( NYEARS  > 0 )) && TODO+=(yearly  "$NYEARS")
 
-log -l -t "Starting $CMDNAME"
-log "bash version: ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}.${BASH_VERSINFO[2]}"
-
-log ""
-log "Hostname: $(hostname)"
-log "Operating System: $(uname -sr) on $(uname -m)"
-log "Config : ${CONFIG}"
-log "Src dir: ${SOURCEDIR}"
-log "Dst dir: ${SERVER}:${DESTDIR}"
-log "Actions: ${TODO[*]}"
-log "Filter: $FILTER"
-log "Rsync additional options (${#RSYNCOPTS[@]}): ${#RSYNCOPTS[@]}"
+log -l -t "Starting %s" "$CMDNAME"
+log "Bash version: %s.%s.%s" \
+    "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}" "${BASH_VERSINFO[2]}"
+log "Hostname: %s" "$(hostname)"
+log "Operating System: %s on %s" "$(uname -sr)" "$(uname -m)"
+log "Config : %s\n" "$CONFIG"
+log "Src dir: %s" "$SOURCEDIR"
+log "Dst dir: %s" "$SERVER:$DESTDIR"
+log "Actions: %s" "${TODO[*]}"
+log "Filter: %s" "$FILTER"
+log "Rsync additional options (%d): %s" "${#RSYNCOPTS[@]}" "${RSYNCOPTS[*]}"
 
 log -n "Mail recipient: "
 # shellcheck disable=SC2015
@@ -415,50 +478,47 @@ log -n "Compression:" && [[ $ZIPMAIL = zip ]] && log "gzip" || log "none"
 
 # check availability of necessary commands
 declare -a cmdavail=()
-for cmd in rsync gzip base64 sendmail; do
-    log -n "Checking for $cmd... "
+log -n "Checking for commands : "
+for cmd in rsync base64 sendmail gzip; do
+    log -n "%s..." "$cmd..."
     if type -P "$cmd" > /dev/null; then
-        log "ok"
+        log -n "ok "
     else
         if [[ "$cmd" = "gzip" ]]; then
-            log "NOK (ignored, disabling compression)"
+            log -n "NOK (compression disabled)"
             ZIPMAIL="cat"
             continue
         fi
-        log "NOK"
+        log -n "NOK "
         cmdavail+=("$cmd")
     fi
 done
-
+log ""
 if (( ${#cmdavail[@]} )); then
-    log -s "Fatal. Please install the following programs: ${cmdavail[*]}."
+    log -s "Fatal. Please install the following programs: %s." "${cmdavail[*]}"
     error_handler $LINENO 1
 fi
 unset cmdavail
+
+# create lock file
+lock_lock
 
 log -s "Mark"                   # to separate email body
 
 # select handling depending on local or networked target (ssh or not).
 if [[ $SERVER = local ]]; then  # local backup
     DOIT=""
-    DEST=${DESTDIR}
+    DEST="$DESTDIR"
 else                            # remote backup
-    DOIT="ssh ${SERVER}"
-    DEST="${SERVER}:${DESTDIR}"
+    DOIT="ssh $SERVER"
+    DEST="$SERVER:$DESTDIR"
 fi
 
 # commands and specific variables.
-EXIST="${DOIT} test -e"
-MOVE="${DOIT} mv"
-REMOVE="${DOIT} rm -rf"
-COPYHARD="${DOIT} rsync -ar"
-
-# prints out and run a command. Used mainly for rsync debug.
-echorun () {
-    log "$@"
-    "$@"
-    return $?
-}
+EXIST="$DOIT test -e"
+MOVE="$DOIT mv"
+REMOVE="$DOIT rm -rf"
+COPYHARD="$DOIT rsync -ar"
 
 # rotate files. arguments are a string and a number. For instance $1=weekly,
 # $2=3.
@@ -466,27 +526,27 @@ echorun () {
 # then we remove $1-03, and move $1-02 to $1-03, $1-01 to $1-02, etc...
 rotate-files () {
     # shellcheck disable=SC2207
-    files=( $(seq -f "${DESTDIR}/${1}-%02g" "${2}" -1 0) )
-    log -s -t -n "${files[0]##*/} deletion... "
+    files=( $(seq -f "$DESTDIR/$1-%02g" "$2" -1 0) )
+    log -s -t -n "%s deletion... " "${files[0]##*/}"
     status=0
-    ${REMOVE} "${files[0]}" || status=$?
+    $REMOVE "${files[0]}" || status=$?
     if (( status != 0 )); then
         # this should never happen.
         # But I saw this event in case of a file system corruption. Better
         # is to stop immediately instead of accepting strange side effects.
-        if ${EXIST} "${files[0]}" ; then
-            log -s "Could not remove ${files[0]}. This SHOULD NOT happen."
-            error_handler $LINENO ${status}
+        if $EXIST "${files[0]}" ; then
+            log -s "Could not remove %s. This SHOULD NOT happen." "${files[0]}"
+            error_handler $LINENO $status
         fi
     fi
     log "done."
 
-    log -s -t -n "${1} rotation... "
+    log -s -t -n "%s rotation... " "$1"
     while (( ${#files[@]} > 1 ))
     do
-        if ${EXIST} "${files[1]}" ; then
-            [[ $DEBUG = y ]] && log -n "${files[1]:(-2)} "
-            ${MOVE} "${files[1]}" "${files[0]}"
+        if $EXIST "${files[1]}" ; then
+            [[ $DEBUG = y ]] && log -n "%s " "${files[1]:(-2)} "
+            $MOVE "${files[1]}" "${files[0]}"
         fi
         unset "files[0]"        # shift and pack array
         files=( "${files[@]}" )
@@ -495,33 +555,26 @@ rotate-files () {
     return 0
 }
 
-# create lock file
-if ! mkdir "${LOCKFILE}"; then
-    log -s  "Cannot create lock file. Exiting."
-    error_handler $LINENO 1
-fi
-LOCKED=y
-
 # main loop.
 while [[ ${TODO[0]} != "" ]]
 do
     # these variables to make the script easier to read.
     todo="${TODO[0]}"           # daily, weekly, etc...
     keep="${TODO[1]}"           # # of versions to keep for $todo set
-    todop="${DESTDIR}/${todo}"  # prefix for backup (e.g. "destdir/daily")
-    tdest="${todop}-00"         # target full path (e.g. "destdir/daily-00")
-    ldest="${DESTDIR}/daily-01" # link-dest dir (always daily-01)
+    todop="$DESTDIR/$todo"      # prefix for backup (e.g. "destdir/daily")
+    tdest="$todop-00"           # target full path (e.g. "destdir/daily-00")
+    ldest="$DESTDIR/daily-01"   # link-dest dir (always daily-01)
 
-    log -l -t "${todo} backup..."
+    log -l -t "%s backup..." "$todo"
 
     # check if target (XX-00) directory exists. If yes, we must have the
     # resume option to go on.
-    if ${EXIST} "${tdest}"; then
+    if $EXIST "$tdest"; then
         if [[ $RESUME = n ]]; then
-            log -s "${tdest} already exists, and no \"resume\" option."
+            log -s '%s already exists, and no "resume" option.' "$tdest"
             error_handler $LINENO 1
         fi
-        log -s "Warning: Resuming ${todo} partial backup.".
+        log -s "Warning: Resuming %s partial backup." "$todo"
     fi
 
     # daily backup.
@@ -537,18 +590,18 @@ do
         status=0
         echorun rsync \
             -aHixv \
-            "${FILTER}" \
+            "$FILTER" \
             "${RSYNCOPTS[@]}" \
-            ${COMPRESS} \
-            ${NUMID} \
+            $COMPRESS \
+            $NUMID \
             --delete \
             --delete-during \
             --delete-excluded \
-            --modify-window=${MODIFYWINDOW} \
+            --modify-window=$MODIFYWINDOW \
             --partial \
-            --link-dest="${ldest}" \
+            --link-dest="$ldest" \
             . \
-            "${DEST}/daily-00" || status=$?
+            "$DEST/daily-00" || status=$?
         # error 24 is "vanished source file", and should be ignored.
         if (( status != 24 && status != 0)); then
             error_handler $LINENO $status
@@ -556,15 +609,15 @@ do
         aftersync               # script to run after the sync
     else                        # non-daily case.
         status=0
-        ${EXIST} "${ldest}" || status=$?
+        $EXIST "$ldest" || status=$?
         if ((status == 0 )); then
-            log -s -t "${tdest} update..."
-            ${COPYHARD} --link-dest="${ldest}" "${ldest}/" "${tdest}"
+            log -s -t "%s update..." "$tdest"
+            $COPYHARD --link-dest="$ldest" "$ldest/" "$tdest"
         else
-            log "No ${ldest} directory. Skipping ${todo} backup."
+            log "No %s directory. Skipping %s backup." "$ldest" "$todo"
         fi
     fi
-    rotate-files "${todo}" "${keep}"
+    rotate-files "$todo" "$keep"
 
     # shift and pack TODO array
     unset 'TODO[0]' 'TODO[1]'
