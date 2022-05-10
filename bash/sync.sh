@@ -142,8 +142,13 @@
 ###############################################################################
 #########################  options default values
 ###############################################################################
+<<<<<<< Updated upstream
 # These ones can be set by command-line.
 # They can also be overwritten in configuration file (prefered option).
+=======
+# These ones can be set by command-line and in configuration file.
+# priority is given to configuration file.
+>>>>>>> Stashed changes
 YEARLY=n                        # (-ay) yearly backup (y/n)
 MONTHLY=n                       # (-am) monthly backup (y/n)
 WEEKLY=n                        # (-aw) weekly backup (y/n)
@@ -157,7 +162,7 @@ DEBUG=n                         # (-D) debug: no I/O redirect (y/n)
 MAILTO=${MAILTO:-""}            # (-n) mail recipient. -n sets it to ""
 ZIPMAIL="gzip"                  # (-Z) zip mail attachment
 
-# options not available on command line, but settable in config  file.
+# options only settable in config  file.
 NYEARS=3                        # keep # years (int)
 NMONTHS=12                      # keep # months (int)
 NWEEKS=4                        # keep # weeks (int)
@@ -474,13 +479,17 @@ log -n "Mail recipient: "
 # shellcheck disable=SC2015
 [[ -n "$MAILTO" ]] && log "$MAILTO" || log "<unset>"
 # shellcheck disable=SC2015
-log -n "Compression:" && [[ $ZIPMAIL = zip ]] && log "gzip" || log "none"
+log -n "Compression: " && [[ $ZIPMAIL = gzip ]] && log "gzip" || log "none"
 
 # check availability of necessary commands
 declare -a cmdavail=()
 log -n "Checking for commands : "
 for cmd in rsync base64 sendmail gzip; do
+<<<<<<< Updated upstream
     log -n "%s..." "$cmd..."
+=======
+    log -n "%s..." "$cmd"
+>>>>>>> Stashed changes
     if type -P "$cmd" > /dev/null; then
         log -n "ok "
     else
@@ -556,8 +565,7 @@ rotate-files () {
 }
 
 # main loop.
-while [[ ${TODO[0]} != "" ]]
-do
+while [[ ${TODO[0]} != "" ]]; do
     # these variables to make the script easier to read.
     todo="${TODO[0]}"           # daily, weekly, etc...
     keep="${TODO[1]}"           # # of versions to keep for $todo set
