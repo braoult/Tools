@@ -142,13 +142,8 @@
 ###############################################################################
 #########################  options default values
 ###############################################################################
-<<<<<<< Updated upstream
-# These ones can be set by command-line.
-# They can also be overwritten in configuration file (prefered option).
-=======
 # These ones can be set by command-line and in configuration file.
 # priority is given to configuration file.
->>>>>>> Stashed changes
 YEARLY=n                        # (-ay) yearly backup (y/n)
 MONTHLY=n                       # (-am) monthly backup (y/n)
 WEEKLY=n                        # (-aw) weekly backup (y/n)
@@ -378,59 +373,68 @@ exit_handler() {
 ###############################################################################
 #########################  Options/Environment setup
 ###############################################################################
-# command-line options parsing.
-OPTIND=1
-shopt -s extglob                # to parse "-a" option
-while getopts a:DfnruvzZ todo; do
-    case "$todo" in
-        a)  # we use US (Unit Separator, 0x1F, control-_) as separator
-            # next line will add US before each char (including 1st one)
-            IFS=$'\x1F' read -ra periods <<< "${OPTARG//?()/$'\x1F'}"
-            # we skip 1st (empty) ellement of array
-            for period in "${periods[@]:1}"; do
-                case "$period" in
-                    d) DAILY=y;;
-                    w) WEEKLY=y;;
-                    m) MONTHLY=y;;
-                    y) YEARLY=y;;
-                    *) printf '%s: unknown period "%s"\n' "$CMDNAME" "$period"
-                       usage
-                esac
-            done
-            ;;
-        f) FILTERLNK=y;;
-        r) RESUME=y;;
-        n) MAILTO="";;
-        z) COMPRESS=-y;;       # rsync compression. Depends on net/CPU perfs
-        u) NUMID="--numeric-ids";;
-        D) DEBUG=y;;
-        Z) ZIPMAIL="cat";;
-        *) usage;;
-    esac
-done
-# Now check remaining argument (configuration file), which should be unique,
-# and read the file.
-shift $((OPTIND - 1))
-(( $# != 1 )) && usage
-CONFIG="$1"
-LOCKDIR=".sync-$SERVER-${CONFIG##*/}.lock"
+# command-line parsing / configuration file read.
+parse_opts() {
+    OPTIND=0
+    shopt -s extglob                # to parse "-a" option
+    while getopts a:DfnruvzZ todo; do
+        case "$todo" in
+            a)  # we use US (Unit Separator, 0x1F, control-_) as separator
+                # next line will add US before each char (including 1st one)
+                IFS=$'\x1F' read -ra periods <<< "${OPTARG//?()/$'\x1F'}"
+                # we skip 1st (empty) ellement of array
+                for period in "${periods[@]:1}"; do
+                    case "$period" in
+                        d) DAILY=y;;
+                        w) WEEKLY=y;;
+                        m) MONTHLY=y;;
+                        y) YEARLY=y;;
+                        *) printf '%s: unknown period "%s"\n' "$CMDNAME" "$period"
+                           usage
+                    esac
+                done
+                ;;
+            f) FILTERLNK=y;;
+            r) RESUME=y;;
+            n) MAILTO="";;
+            z) COMPRESS=-y;;       # rsync compression. Depends on net/CPU perfs
+            u) NUMID="--numeric-ids";;
+            D) DEBUG=y;;
+            Z) ZIPMAIL="cat";;
+            *) usage;;
+        esac
+    done
+    # Now check remaining argument (configuration file), which should be unique,
+    # and read the file.
+    shift $((OPTIND - 1))
+    (( $# != 1 )) && usage
+    CONFIG="$1"
 
-if [[ ! -r "$CONFIG" ]]; then
-    printf "%s: Cannot open $CONFIG file. Exiting.\n" "$CMDNAME"
-    exit 1
-fi
-# shellcheck source=/dev/null
-source "$CONFIG"
+    LOCKDIR=".sync-$SERVER-${CONFIG##*/}.lock"
+
+    if [[ ! -r "$CONFIG" ]]; then
+        printf "%s: Cannot open $CONFIG file. Exiting.\n" "$CMDNAME"
+        exit 1
+    fi
+    # shellcheck source=/dev/null
+    source "$CONFIG"
+}
+
+parse_opts "$@"
 
 # we set backups to be done if none has been set yet (i.e. none is "y").
 # Note: we use the form +%-d to avoid zero padding :
 # for bash, starting with 0 => octal => 08 is invalid
-if ! [[ "$DAILY$WEEKLY$MONTHLY$YEARLY" =~ .*y.* ]]; then
-    (( $(date +%u) == 7 )) && WEEKLY=y
-    (( $(date +%-d) == 1 )) && MONTHLY=y
-    (( $(date +%-d) == 1 && $(date +%-m) == 1 )) && YEARLY=y
-    DAILY=y
-fi
+adjust_targets() {
+    if ! [[ "$DAILY$WEEKLY$MONTHLY$YEARLY" =~ .*y.* ]]; then
+        (( $(date +%u) == 7 )) && WEEKLY=y
+        (( $(date +%-d) == 1 )) && MONTHLY=y
+        (( $(date +%-d) == 1 && $(date +%-m) == 1 )) && YEARLY=y
+        DAILY=y
+    fi
+}
+
+adjust_targets
 
 # After these basic initializations, errors will be managed by the
 # following handler. It is better to do this before the redirections below.
@@ -485,11 +489,7 @@ log -n "Compression: " && [[ $ZIPMAIL = gzip ]] && log "gzip" || log "none"
 declare -a cmdavail=()
 log -n "Checking for commands : "
 for cmd in rsync base64 sendmail gzip; do
-<<<<<<< Updated upstream
-    log -n "%s..." "$cmd..."
-=======
     log -n "%s..." "$cmd"
->>>>>>> Stashed changes
     if type -P "$cmd" > /dev/null; then
         log -n "ok "
     else
