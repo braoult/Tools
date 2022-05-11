@@ -11,6 +11,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later <https://spdx.org/licenses/GPL-3.0-or-later.html>
 #
+#%MAN_BEGIN%
 # NAME
 #       sync.sh - a backup utility using ssh/rsync facilities.
 #
@@ -18,7 +19,7 @@
 #       sync.sh [-ymwdznt] CONFIG
 #
 # DESCRIPTION
-#       Performs a backup to a local or remote destination, keeping different
+#       Perform a backup to a local or remote destination, keeping different
 #       versions (daily, weekly, monthly, yearly). All options can be set in
 #       CONFIG file, which is mandatory.
 #       The synchronization is make with rsync(1), and only files changed or
@@ -50,6 +51,8 @@
 #          bash's -x option) when some errors are difficult to track.
 #       -f
 #          Filter some rsync output, such as hard and soft links, dirs, etc.
+#       -m
+#          Display a "man-like" description and exit.
 #       -n
 #          Do not send mail report (which is the default if MAILTO environment
 #          is set). Practically, this option only unsets MAILTO.
@@ -100,6 +103,10 @@
 # CONFIGURATION FILE
 #       TODO: Write documentation. See example (sync-conf-example.sh).
 #
+# AUTHOR
+#       Bruno Raoult.
+#
+#%MAN_END%
 # BUGS
 #       Many.
 #       This was written for a "terastation" NAS server, which is a kind of
@@ -133,10 +140,6 @@
 #       - replace bash's getopts for a better options parsing tool, such as
 #         GNU's getopt(1) could be an option, but not available everywhere
 #         (for example on MacOS). Likely impossible to keep this script portable.
-#
-# AUTHOR
-#       Bruno Raoult.
-#
 #
 
 ###############################################################################
@@ -180,6 +183,7 @@ function aftersync () {
 # understand exactly what you do.
 # Some variables were moved into the code (example: in the log() function),
 # for practical reasons, the absence of associative arrays being one of them.
+SCRIPT="$0"                     # full path to script
 CMDNAME=${0##*/}                # script name
 PID=$$                          # current pricess PID
 LOCKED=n                        # indicates if we created lock file.
@@ -190,8 +194,12 @@ STARTTIME=$(date +%s)           # time since epoch in seconds
 ###############################################################################
 #########################  helper functions
 ###############################################################################
+man() {
+    sed -n '/^#%MAN_BEGIN%/,/^#%MAN_END%$/{//!s/^#[ ]\{0,1\}//p}' "$SCRIPT" | more
+}
+
 usage () {
-    printf "usage: %s [-a PERIOD][-DfnruvzZ] config-file\n" "$CMDNAME"
+    printf "usage: %s [-a PERIOD][-DfmnruvzZ] config-file\n" "$CMDNAME"
     exit 1
 }
 
@@ -377,9 +385,10 @@ exit_handler() {
 parse_opts() {
     OPTIND=0
     shopt -s extglob                # to parse "-a" option
-    while getopts a:DfnruvzZ todo; do
+    while getopts a:DfmnruvzZ todo; do
         case "$todo" in
-            a)  # we use US (Unit Separator, 0x1F, control-_) as separator
+            a)
+                # we use US (Unit Separator, 0x1F, control-_) as separator
                 # next line will add US before each char (including 1st one)
                 IFS=$'\x1F' read -ra periods <<< "${OPTARG//?()/$'\x1F'}"
                 # we skip 1st (empty) ellement of array
@@ -394,14 +403,34 @@ parse_opts() {
                     esac
                 done
                 ;;
-            f) FILTERLNK=y;;
-            r) RESUME=y;;
-            n) MAILTO="";;
-            z) COMPRESS=-y;;       # rsync compression. Depends on net/CPU perfs
-            u) NUMID="--numeric-ids";;
-            D) DEBUG=y;;
-            Z) ZIPMAIL="cat";;
-            *) usage;;
+            f)
+                FILTERLNK=y
+                ;;
+            r)
+                RESUME=y
+                ;;
+            m)
+                man
+                exit 0
+                ;;
+            n)
+                MAILTO=""
+                ;;
+            z)
+                COMPRESS=-y     # rsync compression. Depends on net/CPU perfs
+                ;;
+            u)
+                NUMID="--numeric-ids"
+                ;;
+            D)
+                DEBUG=y
+                ;;
+            Z)
+                ZIPMAIL="cat"
+                ;;
+            *)
+                usage
+                ;;
         esac
     done
     # Now check remaining argument (configuration file), which should be unique,
