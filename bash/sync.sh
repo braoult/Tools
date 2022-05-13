@@ -51,6 +51,8 @@
 #          bash's -x option) when some errors are difficult to track.
 #       -f
 #          Filter some rsync output, such as hard and soft links, dirs, etc.
+#       -l
+#          Keep log file (usually /tmp/sync-log-PID).
 #       -m
 #          Display a "man-like" description and exit.
 #       -n
@@ -70,8 +72,8 @@
 #          Enable rsync compression. Should be used when the transport is more
 #          expensive than CPU (typically slow connections).
 #       -Z
-#          By default, if gzip utility is available, the log attachment is
-#          compressed. This option will prevent any compression.
+#          By default, if gzip utility is available, the email log attachment
+#          is compressed. This option will prevent any compression.
 #
 # GENERAL
 #       You should avoid modifying variables in this script.
@@ -107,6 +109,7 @@
 #       Bruno Raoult.
 #
 #%MAN_END%
+#
 # BUGS
 #       Many.
 #       This was written for a "terastation" NAS server, which is a kind of
@@ -159,6 +162,7 @@ NUMID=""                        # (-u) use numeric IDs
 DEBUG=n                         # (-D) debug: no I/O redirect (y/n)
 MAILTO=${MAILTO:-""}            # (-n) mail recipient. -n sets it to ""
 ZIPMAIL="gzip"                  # (-Z) zip mail attachment
+KEEPLOGFILE=n                   # (-l) keep log file
 
 # options only settable in config  file.
 NYEARS=3                        # keep # years (int)
@@ -187,9 +191,23 @@ SCRIPT="$0"                     # full path to script
 CMDNAME=${0##*/}                # script name
 PID=$$                          # current pricess PID
 LOCKED=n                        # indicates if we created lock file.
-SUBJECT="$CMDNAME ${*##*/}"     # mail subject
-ERROR=0                         # set by error_handler when called
 STARTTIME=$(date +%s)           # time since epoch in seconds
+HOSTNAME="$(hostname)"
+declare -A ERROR_STR=(          # error strings
+    [0]="ok"
+    [1]="error"
+    [2]="missing command"
+    [3]="source directory error"
+    [4]="could not create lock file"
+    [5]="could not rotate backup directories"
+    [6]="partial backup detected"
+    [7]="rsync error"
+    [8]="invalid command line"
+    [9]="missing configuration file"
+    [10]="missing destination directory"
+    [11]="cannot aquire lock"
+    [12]="cannot determine PID of locked directory"
+)
 
 ###############################################################################
 #########################  helper functions
@@ -199,8 +217,8 @@ man() {
 }
 
 usage () {
-    printf "usage: %s [-a PERIOD][-DfmnruvzZ] config-file\n" "$CMDNAME"
-    exit 1
+    printf "usage: %s [-a PERIOD][-DflmnruvzZ] config-file\n" "$CMDNAME"
+    exit 8
 }
 
 # log function
@@ -245,33 +263,47 @@ echorun () {
 
 # lock system
 lock_lock() {
-    local opid lock="$LOCKDIR/pid"
-    log -n "Setting lock: "
-    if [[ -r "$LOCKDIR" && -r "$lock" ]]; then
-        read -r opid < "$lock"
-        if ps -p "$opid" &> /dev/null; then
-            log "PID %d (in %s) still active. Exiting." "$opid" "$lock"
-            exit 0
+    local opid pidfile="$LOCKDIR/pid"
+    #log -n "Setting lock: "
+    log "Acquire lock (%s), pid=%d" "$LOCKDIR" "$PID"
+    if [[ -d "$LOCKDIR" ]]; then
+        if [[ -r "$pidfile" ]]; then
+            read -r opid < "$pidfile"
+            if ps -p "$opid" &> /dev/null; then
+                log "PID %d (in %s) still active. Exiting." "$opid" "$pidfile"
+                exit 11
+            fi
+            log "Stale lock file found (pid=%d), forcing unlock... " "$opid"
+            lock_unlock -f
+            log "Re-Acquire lock (%s), pid=%d" "$LOCKDIR" "$PID"
+        else
+            log "lockdir exists with unknown PID"
+            exit 12
         fi
-        log "Stale lock file found (pid=%d), forcing unlock... " "$opid"
-        lock_unlock -f
     fi
     if ! mkdir "$LOCKDIR"; then
         log "Cannot create lock file. Exiting."
-        error_handler $LINENO 1
+        exit 4
     fi
-    log "ok."
-    printf "%d\n" "$PID" >> "$lock"
+    printf "%d\n" "$PID" >> "$pidfile"
     LOCKED=y
     return 0
 }
 
 lock_unlock() {
     local force=n
-    [[ $# == 1 ]] && [[ $1 == -f ]] && force=y
+    [[ $# == 1 && $1 == -f ]] && force=y
     if [[ "$force" = y || "$LOCKED" = y ]]; then
-        rm --verbose "$LOCKDIR"/pid
-        rm --dir --verbose "$LOCKDIR"
+        if [[ "$force" = y ]]; then
+            log "Forced lock release (%s)" "$LOCKDIR"
+        else
+            log "Release lock (%s)" "$LOCKDIR"
+        fi
+        #rm --verbose "$LOCKDIR"/pid
+        #rm --dir --verbose "$LOCKDIR"
+        rm -vrf "$LOCKDIR"
+    else
+        log "Nothing to unlock (%s)" "$LOCKDIR"
     fi
     return 0
 }
@@ -279,20 +311,22 @@ lock_unlock() {
 # Error handler.After these basic initializations, errors will be managed by the
 # following handler. It is better to do this before the redirections below.
 error_handler() {
-    ERROR=$2
-    echo "FATAL: Error line $1, exit code $2. Aborting."
-    exit "$ERROR"
+    local line="$1" err="$2"
+    printf "FATAL: Error line %s, exit code %s. Aborting.\n" "$line" "$err"
+    exit "$err"
 }
 
 exit_handler() {
+    local -i status="$?"
+    local error="${ERROR_STR[$status]}"
+    local subject="$CMDNAME: $SOURCEDIR on $HOSTNAME"
     # we dont need lock file anymore (another backup could start from now).
-    log "exit_handler LOCKED=%s" "$LOCKED"
     lock_unlock
 
-    if (( ERROR == 0 )); then
-        SUBJECT="Successful $SUBJECT"
+    if (( status == 0 )); then
+        subject="$subject (Success)"
     else
-        SUBJECT="Failure in $SUBJECT"
+        subject="$subject (Failure: $error)"
     fi
 
     log -l -t "Ending backup."
@@ -300,8 +334,9 @@ exit_handler() {
     if [[ $DEBUG = n ]]; then
         # restore stdout (not necessary), set temp file as stdin, close fd 3.
         # remove temp file (as still opened by stdin, will still be readable).
+        [[ $KEEPLOGFILE = y ]] && log "keeping log file: %s" "$LOGFILE"
         exec 1<&3 3>&- 0<"$TMPFILE"
-        rm -f "$TMPFILE"
+        [[ $KEEPLOGFILE = n ]] && rm -f "$TMPFILE"
     else
         exec 0<<<""             # force empty input for the following
     fi
@@ -312,12 +347,8 @@ exit_handler() {
     # more handled the final way.
     {
         # we write these logs here so that they are on top if no DEBUG.
-        printf "%s: Exit code: %d " "$CMDNAME" "$ERROR"
-        if ((ERROR == 0)); then
-            printf "(ok) "
-        else
-            printf "(error) "
-        fi
+        printf "%s: Exit code: %d (%s) " "$CMDNAME" "$status" \
+               "${ERROR_STR[$status]}"
 
         printf "in %d seconds (%d:%02d:%02d)\n\n" \
             $((SECS)) $((SECS/3600)) $((SECS%3600/60)) $((SECS%60))
@@ -336,7 +367,7 @@ exit_handler() {
                 # email header
                 printf "To: %s\n" "$MAILTO"
                 #printf "From: %s" "$MAILTO"
-                printf "Subject: %s\n" "$SUBJECT"
+                printf "Subject: %s\n" "$subject"
                 printf "MIME-Version: 1.0\n"
                 printf 'Content-Type: multipart/mixed; boundary="%s"\n' "$MIMESTR"
                 printf "\n"
@@ -385,7 +416,7 @@ exit_handler() {
 parse_opts() {
     OPTIND=0
     shopt -s extglob                # to parse "-a" option
-    while getopts a:DfmnruvzZ todo; do
+    while getopts a:DflmnruvzZ todo; do
         case "$todo" in
             a)
                 # we use US (Unit Separator, 0x1F, control-_) as separator
@@ -408,6 +439,9 @@ parse_opts() {
                 ;;
             r)
                 RESUME=y
+                ;;
+            l)
+                KEEPLOGFILE=y
                 ;;
             m)
                 man
@@ -439,14 +473,14 @@ parse_opts() {
     (( $# != 1 )) && usage
     CONFIG="$1"
 
-    LOCKDIR=".sync-$SERVER-${CONFIG##*/}.lock"
-
     if [[ ! -r "$CONFIG" ]]; then
         printf "%s: Cannot open $CONFIG file. Exiting.\n" "$CMDNAME"
-        exit 1
+        exit 9
     fi
     # shellcheck source=/dev/null
     source "$CONFIG"
+
+    LOCKDIR="/tmp/$CMDNAME-$HOSTNAME-${CONFIG##*/}.lock"
 }
 
 parse_opts "$@"
@@ -479,14 +513,6 @@ if [[ $DEBUG = n ]]; then
     exec 3<&1 >"$TMPFILE"     # no more output on screen from now.
 fi
 exec 2>&1
-if [[ ! -d "$SOURCEDIR" ]]; then
-    log -s "Invalid source directory (%s)." "$SOURCEDIR"
-    error_handler $LINENO 1
-fi
-if ! cd "$SOURCEDIR"; then
-    log -s "Cannot cd to %s." "$SOURCEDIR"
-    error_handler $LINENO 1
-fi
 
 # prepare list of backups, such as "daily 7 weekly 4", etc...
 # the order is important.
@@ -499,7 +525,7 @@ TODO=()
 log -l -t "Starting %s" "$CMDNAME"
 log "Bash version: %s.%s.%s" \
     "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}" "${BASH_VERSINFO[2]}"
-log "Hostname: %s" "$(hostname)"
+log "Hostname: %s" "$HOSTNAME"
 log "Operating System: %s on %s" "$(uname -sr)" "$(uname -m)"
 log "Config : %s\n" "$CONFIG"
 log "Src dir: %s" "$SOURCEDIR"
@@ -516,32 +542,42 @@ log -n "Compression: " && [[ $ZIPMAIL = gzip ]] && log "gzip" || log "none"
 
 # check availability of necessary commands
 declare -a cmdavail=()
+declare error=0
 log -n "Checking for commands : "
 for cmd in rsync base64 sendmail gzip; do
     log -n "%s..." "$cmd"
     if type -P "$cmd" > /dev/null; then
         log -n "ok "
     else
-        if [[ "$cmd" = "gzip" ]]; then
-            log -n "NOK (compression disabled)"
-            ZIPMAIL="cat"
-            continue
-        fi
+        (( error++ ))
         log -n "NOK "
+        case "$cmd" in
+            gzip)
+                log -n "(compression disabled) "
+                ZIPMAIL="cat"
+                (( error-- ))   # Not an error
+               ;;
+            sendmail)
+                MAILTO=""       # to get some output in cron
+                ;;
+        esac
         cmdavail+=("$cmd")
     fi
 done
 log ""
-if (( ${#cmdavail[@]} )); then
-    log -s "Fatal. Please install the following programs: %s." "${cmdavail[*]}"
-    error_handler $LINENO 1
-fi
+(( ${#cmdavail[@]} )) && log -s "Please install the following programs: %s." \
+                             "${cmdavail[*]}"
+(( error > 0 )) && exit 2
 unset cmdavail
+unset error
 
+# all logs from this point will be in email attachment
+log -s "Mark"                   # to separate email body
+
+log -l -t "Starting backup"
 # create lock file
 lock_lock
 
-log -s "Mark"                   # to separate email body
 
 # select handling depending on local or networked target (ssh or not).
 if [[ $SERVER = local ]]; then  # local backup
@@ -574,7 +610,7 @@ rotate-files () {
         # is to stop immediately instead of accepting strange side effects.
         if $EXIST "${files[0]}" ; then
             log -s "Could not remove %s. This SHOULD NOT happen." "${files[0]}"
-            error_handler $LINENO $status
+            exit 5
         fi
     fi
     log "done."
@@ -593,6 +629,19 @@ rotate-files () {
     return 0
 }
 
+if [[ ! -d "$SOURCEDIR" ]]; then
+    log -s "Invalid source directory (%s)." "$SOURCEDIR"
+    exit 3
+fi
+if ! cd "$SOURCEDIR"; then
+    log -s "Cannot cd to %s." "$SOURCEDIR"
+    exit 3
+fi
+if ! $EXIST "$DESTDIR"; then
+    log -s 'destination directory (%s) missing.' "$DESTDIR"
+    exit 10
+fi
+
 # main loop.
 while [[ ${TODO[0]} != "" ]]; do
     # these variables to make the script easier to read.
@@ -609,7 +658,7 @@ while [[ ${TODO[0]} != "" ]]; do
     if $EXIST "$tdest"; then
         if [[ $RESUME = n ]]; then
             log -s '%s already exists, and no "resume" option.' "$tdest"
-            error_handler $LINENO 1
+            exit 6
         fi
         log -s "Warning: Resuming %s partial backup." "$todo"
     fi
@@ -641,7 +690,8 @@ while [[ ${TODO[0]} != "" ]]; do
             "$DEST/daily-00" || status=$?
         # error 24 is "vanished source file", and should be ignored.
         if (( status != 24 && status != 0)); then
-            error_handler $LINENO $status
+            log -s "rsync error %d" "$status"
+            exit 7
         fi
         aftersync               # script to run after the sync
     else                        # non-daily case.
