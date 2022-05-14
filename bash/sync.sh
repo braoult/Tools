@@ -16,7 +16,7 @@
 #       sync.sh - a backup utility using ssh/rsync facilities.
 #
 # SYNOPSIS
-#       sync.sh [-ymwdznt] CONFIG
+#       sync.sh [-a PERIOD][-DflmnruvzZ] CONFIG
 #
 # DESCRIPTION
 #       Perform a backup to a local or remote destination, keeping different
