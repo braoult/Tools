@@ -299,8 +299,6 @@ lock_unlock() {
         else
             log "Release lock (%s)" "$LOCKDIR"
         fi
-        #rm --verbose "$LOCKDIR"/pid
-        #rm --dir --verbose "$LOCKDIR"
         rm -vrf "$LOCKDIR"
     else
         log "Nothing to unlock (%s)" "$LOCKDIR"
@@ -334,7 +332,6 @@ exit_handler() {
     if [[ $DEBUG = n ]]; then
         # restore stdout (not necessary), set temp file as stdin, close fd 3.
         # remove temp file (as still opened by stdin, will still be readable).
-        [[ $KEEPLOGFILE = y ]] && log "keeping log file: %s" "$LOGFILE"
         exec 1<&3 3>&- 0<"$TMPFILE"
         [[ $KEEPLOGFILE = n ]] && rm -f "$TMPFILE"
     else
@@ -343,16 +340,18 @@ exit_handler() {
 
     SECS=$(( $(date +%s) - STARTTIME ))
 
-    # Warning: no logs allowed here (before next braces), as stdout is no
-    # more handled the final way.
+    # Warning: no logs allowed here (before next braces), as stdout will not
+    # be handled/filtered.
     {
         # we write these logs here so that they are on top if no DEBUG.
         printf "%s: Exit code: %d (%s) " "$CMDNAME" "$status" \
                "${ERROR_STR[$status]}"
 
-        printf "in %d seconds (%d:%02d:%02d)\n\n" \
-            $((SECS)) $((SECS/3600)) $((SECS%3600/60)) $((SECS%60))
+        printf "in %d seconds (%d:%02d:%02d)\n" \
+               $((SECS)) $((SECS/3600)) $((SECS%3600/60)) $((SECS%60))
 
+        [[ $KEEPLOGFILE = y ]] && printf "log file kept at: %s\n" "$TMPFILE"
+        printf "\n"
         if [[ -n $FILTERLNK ]]; then
             grep -vE "^(hf|cd|cL)[ \+]"
         else
@@ -509,7 +508,7 @@ trap 'exit_handler' EXIT
 # in case of DEBUG, we could close stdin, but there could be side effects,
 # such as ^C handling, etc... So we keep the keyboard available.
 if [[ $DEBUG = n ]]; then
-    TMPFILE=$(mktemp /tmp/sync-log.XXXXXX)
+    TMPFILE=$(mktemp /tmp/sync-XXXXXXXX.log)
     exec 3<&1 >"$TMPFILE"     # no more output on screen from now.
 fi
 exec 2>&1
