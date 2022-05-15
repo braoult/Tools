@@ -592,6 +592,7 @@ EXIST="$DOIT test -e"
 MOVE="$DOIT mv"
 REMOVE="$DOIT rm -rf"
 COPYHARD="$DOIT rsync -ar"
+TOUCH="$DOIT touch"
 
 # rotate files. arguments are a string and a number. For instance $1=weekly,
 # $2=3.
@@ -692,6 +693,7 @@ while [[ ${TODO[0]} != "" ]]; do
             log -s "rsync error %d" "$status"
             exit 7
         fi
+        $TOUCH "$tdest"
         aftersync               # script to run after the sync
     else                        # non-daily case.
         status=0
