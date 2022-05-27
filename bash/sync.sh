@@ -167,19 +167,20 @@ KEEPLOGFILE=n                   # (-l) keep log file
 # options only settable in config  file.
 NYEARS=3                        # keep # years (int)
 NMONTHS=12                      # keep # months (int)
-NWEEKS=4                        # keep # weeks (int)
-NDAYS=7                         # keep # days (int)
+NWEEKS=6                        # keep # weeks (int)
+NDAYS=10                        # keep # days (int)
 declare -a RSYNCOPTS=()         # other rsync options
-SOURCEDIR="."                   # source dir
-DESTDIR="."                     # destination dir
+SOURCEDIR=""                    # source dir
+SERVER=""                       # backup server
+DESTDIR=""                      # destination dir
 MODIFYWINDOW=1                  # accuracy for mod time comparison
 
 # these 2 functions can be overwritten in data file, to run specific actions
 # just before and after the actual sync
-function beforesync () {
+beforesync() {
     log "calling default beforesync..."
 }
-function aftersync () {
+aftersync() {
     log "calling default aftersync..."
 }
 
@@ -530,8 +531,15 @@ log "Config : %s\n" "$CONFIG"
 log "Src dir: %s" "$SOURCEDIR"
 log "Dst dir: %s" "$SERVER:$DESTDIR"
 log "Actions: %s" "${TODO[*]}"
-log "Filter: %s" "$FILTER"
-log "Rsync additional options (%d): %s" "${#RSYNCOPTS[@]}" "${RSYNCOPTS[*]}"
+if (( ${#RSYNCOPTS[@]} )); then
+    log -n "Rsync additional options (%d): " "${#RSYNCOPTS[@]}"
+    for opt in "${RSYNCOPTS[@]}"; do
+        log -n '\"%s\" ' "$opt"
+    done
+    log ""
+else
+    log "Rsync additional options : None."
+fi
 
 log -n "Mail recipient: "
 # shellcheck disable=SC2015
@@ -676,7 +684,6 @@ while [[ ${TODO[0]} != "" ]]; do
         status=0
         echorun rsync \
             -aHixv \
-            "$FILTER" \
             "${RSYNCOPTS[@]}" \
             $COMPRESS \
             $NUMID \

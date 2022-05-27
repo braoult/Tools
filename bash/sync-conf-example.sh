@@ -14,51 +14,51 @@
 # USAGE:
 #    sync.sh -rfu /path/to/sync-conf-example.sh
 
-# full source path
+# below, default values are just below the lines starting with '######'.
+# The only mandatory ones are SOURCEDIR, SERVER, and DESTDIR.
+
+###### source directory full path, destination server and path.
+###### SERVER could user@host, or "local" if local machine
+# SOURCEDIR=""
+# SERVER=""
+# DESTDIR=""
 SOURCEDIR=/example-srcdir
-# server name. Could also be user@hostname
-SERVER=backuphost
-# full destination path on target machine (or relative to home directory)
-DESTDIR=/mnt/array3+4/example-destdir
+SERVER=root@backuphost
+DESTDIR=/mnt/nas1/example-destdir
 
-# backups to keep
-NYEARS=2
-NMONTHS=12
-NWEEKS=4
-NDAYS=7
+###### backups to keep
+# NYEARS=3
+# NMONTHS=12
+# NWEEKS=6
+# NDAYS=10
 
-# FILTER can be used to filter directories to include/exclude. See rsync(1) for
-# details.
-FILTER="--filter=dir-merge .rsync-filter-br"
+###### other rsync options. It must be an array.
+# RSYNCOPTS=()
+FILTERNAME=".rsync-filter-system"
+FILTER=--filter="dir-merge ${FILTERNAME}"
+RSYNCOPTS+=("$FILTER")
 
-# other rsync options. It must be an array. For example, the following line
-# is equivalent to the FILTER line above:
-# RSYNCOPTS=( "--filter=dir-merge .rsync-filter-br" )
-RSYNCOPTS=()
+###### functions run immediately before and after the rsync. Can be used
+###### to create database dumps, etc...
+###### Warning: avoid using "cd", or be sure to come back to current dir
+###### before returning from functions
+# beforesync() { log "calling default beforesync..."; }
+# aftersync()  { log "calling default aftersync...";  }
 
-# functions run just before and after the rsync. Could be useful to create
-# database dumps, etc...
-# Warning: avoid using "cd", or be sure to come back to current dir
-# before returning from functions
-
-# example below will create a dump
+# example below will create a mysql/mariadb dump. At same time we create
+# a FILTERNAME file in database data directory to exclude databases directories
+# themselves.
 function beforesync() {
-    # next line may be removed if you do something. bash does not like empty
-    # functions
-    :
-
     # log is a sync.sh function.
     log -s -t "calling user beforesync: mysql databases dumps..."
 
-    datadir=$(mysql -sN -u root -e 'select @@datadir')
-    # log "mysql datadir=${datadir}"
+    datadir="$(mysql -sN -u root -e 'select @@datadir')"
     rm -f "$datadir/$FILTERNAME"
-    databases=($(mysql -sN -u root -e "SHOW DATABASES;"))
+    readarray databases <<< "$(mysql -sN -u root -e "SHOW DATABASES;")"
 
-    for db in "${databases[@]}"
-    do
+    for db in "${databases[@]}"; do
         # exclude database directory itself
-		echo "- /${db}/*" >> "$datadir/$FILTERNAME"
+		printf "- /%s/*\n " "$db" >> "$datadir/$FILTERNAME"
 
         log -n "${db}... "
         case "$db" in
@@ -68,7 +68,7 @@ function beforesync() {
             *)
                 log -n "dumping to ${datadir}${db}.sql... "
                 mysqldump --user=root --routines "$db" > "$datadir/$db.sql"
-                # log -n "compressing... "
+                log -n "compressing... "
                 gzip "$datadir/$db.sql"
                 log "done."
         esac
@@ -78,9 +78,6 @@ function beforesync() {
 }
 
 function aftersync() {
-    # next line may be removed if you do something. bash does not like empty
-    # functions
-    :
     # we may remove the dump here...
     log -s -t "calling user aftersync"
 }
