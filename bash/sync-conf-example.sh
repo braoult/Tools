@@ -48,28 +48,41 @@ RSYNCOPTS+=("$FILTER")
 # example below will create a mysql/mariadb dump. At same time we create
 # a FILTERNAME file in database data directory to exclude databases directories
 # themselves.
-function beforesync() {
+beforesync() {
+    local -a databases
+    local datadir
+
     # log is a sync.sh function.
     log -s -t "calling user beforesync: mysql databases dumps..."
 
-    datadir="$(mysql -sN -u root -e 'select @@datadir')"
+    if ! datadir="$(mysql -sN -u root -e 'select @@datadir')"; then
+        log -s "cannot get maria databases directory"
+        exit 1
+    fi
     rm -f "$datadir/$FILTERNAME"
-    readarray databases <<< "$(mysql -sN -u root -e "SHOW DATABASES;")"
+    if ! databases=( "$(mysql -sN -u root -e "SHOW DATABASES;")" ); then
+        log -s "cannot get maria databases list"
+        exit 1
+    fi
 
     for db in "${databases[@]}"; do
-        # exclude database directory itself
-		printf "- /%s/*\n " "$db" >> "$datadir/$FILTERNAME"
+        # do not backup database contents itself
+        printf -- "- /%s/*\n" "$db" >> "$datadir/$FILTERNAME"
 
-        log -n "${db}... "
+        log -n "$db... "
         case "$db" in
             information_schema|performance_schema)
                 log "skipped."
                 ;;
             *)
-                log -n "dumping to ${datadir}${db}.sql... "
-                mysqldump --user=root --routines "$db" > "$datadir/$db.sql"
+                log -n "dumping to $datadir$db.sql... "
+                if ! mysqldump --user=root --single-transaction --routines \
+                     "$db" > "$datadir/$db.sql"; then
+                    log -s "mysqldump error"
+                    exit 1
+                fi
                 log -n "compressing... "
-                gzip "$datadir/$db.sql"
+                gzip -f "$datadir/$db.sql"
                 log "done."
         esac
     done
@@ -77,7 +90,12 @@ function beforesync() {
     # cat ${datadir}/${FILTERNAME}
 }
 
-function aftersync() {
+aftersync() {
     # we may remove the dump here...
     log -s -t "calling user aftersync"
 }
+
+# For Emacs, shell-mode:
+# Local Variables:
+# mode: shell-script
+# End:

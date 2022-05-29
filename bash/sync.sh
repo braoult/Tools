@@ -206,8 +206,11 @@ declare -A ERROR_STR=(          # error strings
     [8]="invalid command line"
     [9]="missing configuration file"
     [10]="missing destination directory"
-    [11]="cannot aquire lock"
+    [11]="cannot acquire lock"
     [12]="cannot determine PID of locked directory"
+    [13]="error in rotation"
+    [14]="could not set modification time on target"
+    [15]="error on non-daily tree copy"
 )
 
 ###############################################################################
@@ -217,7 +220,7 @@ man() {
     sed -n '/^#%MAN_BEGIN%/,/^#%MAN_END%$/{//!s/^#[ ]\{0,1\}//p}' "$SCRIPT" | more
 }
 
-usage () {
+usage() {
     printf "usage: %s [-a PERIOD][-DflmnruvzZ] config-file\n" "$CMDNAME"
     exit 8
 }
@@ -504,6 +507,9 @@ adjust_targets
 trap 'error_handler $LINENO $?' ERR SIGHUP SIGINT SIGTERM
 trap 'exit_handler' EXIT
 
+# activate exit on error
+# set -o errexit errtrace nounset pipefail
+
 # standard descriptors redirection.
 # if not DEBUG, save stdout as fd 3, and redirect stdout to temp file.
 # in case of DEBUG, we could close stdin, but there could be side effects,
@@ -606,13 +612,11 @@ TOUCH="$DOIT touch"
 # $2=3.
 # we first build a list from $2 to zero, with 2 padded digits: 03 02 01 00
 # then we remove $1-03, and move $1-02 to $1-03, $1-01 to $1-02, etc...
-rotate-files () {
+rotate-files() {
     # shellcheck disable=SC2207
-    files=( $(seq -f "$DESTDIR/$1-%02g" "$2" -1 0) )
-    log -s -t -n "%s deletion... " "${files[0]##*/}"
-    status=0
-    $REMOVE "${files[0]}" || status=$?
-    if (( status != 0 )); then
+    local -a files=( $(seq -f "$DESTDIR/$1-%02g" "$2" -1 0) )
+    log -s -t -n "deleting %s... " "${files[0]##*/}"
+    if ! $REMOVE "${files[0]}"; then
         # this should never happen.
         # But I saw this event in case of a file system corruption. Better
         # is to stop immediately instead of accepting strange side effects.
@@ -623,12 +627,15 @@ rotate-files () {
     fi
     log "done."
 
-    log -s -t -n "%s rotation... " "$1"
-    while (( ${#files[@]} > 1 ))
-    do
+    log -s -t -n "rotating " "$1"
+    while (( ${#files[@]} > 1 )); do
         if $EXIST "${files[1]}" ; then
-            [[ $DEBUG = y ]] && log -n "%s " "${files[1]:(-2)} "
-            $MOVE "${files[1]}" "${files[0]}"
+            log -n "%s... " "${files[1]##*/}"
+            if ! $MOVE "${files[1]}" "${files[0]}"; then
+                log "error"
+                exit 13
+            fi
+
         fi
         unset "files[0]"        # shift and pack array
         files=( "${files[@]}" )
@@ -700,14 +707,20 @@ while [[ ${TODO[0]} != "" ]]; do
             log -s "rsync error %d" "$status"
             exit 7
         fi
-        $TOUCH "$tdest"
+        if ! $TOUCH "$tdest"; then
+            log -s "cannot change %s modification time (error %d)" \
+                "$DEST/daily-00" "$status"
+            exit 14
+        fi
         aftersync               # script to run after the sync
-    else                        # non-daily case.
-        status=0
-        $EXIST "$ldest" || status=$?
-        if ((status == 0 )); then
+    else                        # non-daily case
+        if $EXIST "$ldest"; then
+            # if ((status == 0 )); then
             log -s -t "%s update..." "$tdest"
-            $COPYHARD --link-dest="$ldest" "$ldest/" "$tdest"
+            if ! $COPYHARD --link-dest="$ldest" "$ldest/" "$tdest"; then
+                log -s "copyhard error %d" "$status"
+                exit 15
+            fi
         else
             log "No %s directory. Skipping %s backup." "$ldest" "$todo"
         fi
