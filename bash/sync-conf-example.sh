@@ -60,7 +60,8 @@ beforesync() {
         exit 1
     fi
     rm -f "$datadir/$FILTERNAME"
-    if ! databases=( "$(mysql -sN -u root -e "SHOW DATABASES;")" ); then
+    # shellcheck disable=2207
+    if ! databases=( $(mysql -sN -u root -e "SHOW DATABASES;") ); then
         log -s "cannot get maria databases list"
         exit 1
     fi
