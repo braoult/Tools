@@ -24,8 +24,12 @@
 #ifndef __BR_RWONCE_H
 #define __BR_RWONCE_H
 
-/************ originally in <include/linux/compiler_types.h> */
-# define __compiletime_error(message) __attribute__((error(message)))
+/************ originally in <include/linux/compiler_attributes.h> */
+#if __has_attribute(__error__)
+# define __compiletime_error(msg)       __attribute__((__error__(msg)))
+#else
+# define __compiletime_error(msg)
+#endif
 
 /************ originally in <include/linux/compiler_types.h> */
 /*
