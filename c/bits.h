@@ -77,6 +77,28 @@ static inline int ctz64(u64 n)
 #   endif
 }
 
+static inline int ctz32(u32 n)
+{
+#   if __has_builtin(__builtin_ctz)
+#   ifdef DEBUG_BITS
+    log_f(1, "builtin ctz.\n");
+#   endif
+    return __builtin_ctzl(n);
+
+#   elif __has_builtin(__builtin_clz)
+#   ifdef DEBUG_BITS
+    log_f(1, "builtin clz.\n");
+#   endif
+    return __WORDSIZE - (__builtin_clz(n & -n) + 1);
+
+#   else
+#   ifdef DEBUG_BITS
+    log_f(1, "emulated.\n");
+#   endif
+    return popcount32((n & −n) − 1);
+#   endif
+}
+
 /* count leading zeroes : 00101000 -> 2
  *                        ^^
  */
@@ -100,7 +122,30 @@ static inline int clz64(u64 n)
     q = (n > 0xF   )     << 2; n >>= q; r |= q;
     q = (n > 0x3   )     << 1; n >>= q; r |= q;
     r |= (n >> 1);
-    return __WORDSIZE - r - 1;
+    return 64 - r - 1;
+#   endif
+}
+
+static inline int clz32(u32 n)
+{
+#   if __has_builtin(__builtin_clz)
+#   ifdef DEBUG_BITS
+    log_f(1, "builtin.\n");
+#   endif
+    return __builtin_clz(n);
+
+#   else
+#   ifdef DEBUG_BITS
+    log_f(1, "emulated.\n");
+#   endif
+    u32 r, q;
+
+    r = (n > 0xFFFF)     << 4; n >>= r;
+    q = (n > 0xFF  )     << 3; n >>= q; r |= q;
+    q = (n > 0xF   )     << 2; n >>= q; r |= q;
+    q = (n > 0x3   )     << 1; n >>= q; r |= q;
+    r |= (n >> 1);
+    return 32 - r - 1;
 #   endif
 }
 
@@ -113,7 +158,7 @@ static inline uint ffs64(u64 n)
 #   ifdef DEBUG_BITS
     log_f(1, "builtin ffsl.\n");
 #   endif
-    return __builtin_ffsll(n);
+    return __builtin_ffsl(n);
 
 #   elif __has_builtin(__builtin_ctzl)
 #   ifdef DEBUG_BITS
@@ -131,6 +176,33 @@ static inline uint ffs64(u64 n)
 #   endif
 }
 
+static inline uint ffs32(u32 n)
+{
+#   if __has_builtin(__builtin_ffs)
+#   ifdef DEBUG_BITS
+    log_f(1, "builtin ffs.\n");
+#   endif
+    return __builtin_ffs(n);
+
+#   elif __has_builtin(__builtin_ctz)
+#   ifdef DEBUG_BITS
+    log_f(1, "builtin ctz.\n");
+#   endif
+    if (n == 0)
+        return (0);
+    return __builtin_ctz(n) + 1;
+
+#   else
+#   ifdef DEBUG_BITS
+    log_f(1, "emulated.\n");
+#   endif
+    return popcount32(n ^ ~-n);
+#   endif
+}
+
+/* count set bits:  10101000 -> 3
+ *                  ^ ^ ^
+ */
 static inline int popcount64(u64 n)
 {
 #   if __has_builtin(__builtin_popcountl)
@@ -152,10 +224,31 @@ static inline int popcount64(u64 n)
 #   endif
 }
 
-/** bit_for_each64 - iterate over an u64 bits
+static inline int popcount32(u32 n)
+{
+#   if __has_builtin(__builtin_popcount)
+#   ifdef DEBUG_BITS
+    log_f(1, "builtin.\n");
+#   endif
+    return __builtin_popcount(n);
+
+#   else
+#   ifdef DEBUG_BITS
+    log_f(1, "emulated.\n");
+#   endif
+    int count = 0;
+    while (n) {
+        count++;
+        n &= (n - 1);
+    }
+    return count;
+#   endif
+}
+
+/** bit_for_each - iterate over an u64/u32 bits
  * @pos:        an int used as current bit
- * @tmp:        a temp u64 used as temporary storage
- * @ul:         the u64 to loop over
+ * @tmp:        a temp u64/u32 used as temporary storage
+ * @ul:         the u64/u32 to loop over
  *
  * Usage:
  * u64 u=139, _t;     //  u=b10001011
@@ -170,9 +263,15 @@ static inline int popcount64(u64 n)
 #define bit_for_each64(pos, tmp, ul)                                    \
     for (tmp = ul, pos = ffs64(tmp); tmp; tmp &= (tmp - 1),  pos = ffs64(tmp))
 
+#define bit_for_each32(pos, tmp, ul)                                    \
+    for (tmp = ul, pos = ffs32(tmp); tmp; tmp &= (tmp - 1),  pos = ffs32(tmp))
+
 /** or would it be more useful (counting bits from zero instead of 1) ?
  */
 #define bit_for_each64_2(pos, tmp, ul)                                  \
-    for (tmp = ul, pos = ctz64(tmp); tmp; tmp ^= 1UL<<pos, pos = ctz64(tmp))
+    for (tmp = ul, pos = ctz64(tmp); tmp; tmp ^= 1UL << pos, pos = ctz64(tmp))
+
+#define bit_for_each32_2(pos, tmp, ul)                                  \
+    for (tmp = ul, pos = ctz32(tmp); tmp; tmp ^= 1U << pos, pos = ctz32(tmp))
 
 #endif  /* BITS_H */
