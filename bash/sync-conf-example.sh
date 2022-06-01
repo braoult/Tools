@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # sync-conf-example.sh - a "sync.sh" configuration file example.
 #
@@ -22,9 +22,9 @@
 # SOURCEDIR=""
 # SERVER=""
 # DESTDIR=""
-SOURCEDIR=/example-srcdir
-SERVER=root@backuphost
-DESTDIR=/mnt/nas1/example-destdir
+export SOURCEDIR=/example-srcdir
+export SERVER=root@backuphost
+export DESTDIR=/mnt/nas1/example-destdir
 
 ###### backups to keep
 # NYEARS=3
@@ -96,7 +96,7 @@ aftersync() {
     log -s -t "calling user aftersync"
 }
 
-# For Emacs, shell-mode:
+# For Emacs, shell-script-mode:
 # Local Variables:
 # mode: shell-script
 # End:

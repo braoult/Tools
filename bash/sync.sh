@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # sync.sh - a backup utility using ssh/rsync facilities.
 #
@@ -480,7 +480,7 @@ parse_opts() {
         printf "%s: Cannot open $CONFIG file. Exiting.\n" "$CMDNAME"
         exit 9
     fi
-    # shellcheck source=/dev/null
+    # shellcheck source=sync-conf-example.sh
     source "$CONFIG"
 
     LOCKDIR="/tmp/$CMDNAME-$HOSTNAME-${CONFIG##*/}.lock"
