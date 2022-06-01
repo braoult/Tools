@@ -1,6 +1,6 @@
-/* move.h - debug/log management.
+/* debug.h - debug/log management.
  *
- * Copyright (C) 2021 Bruno Raoult ("br")
+ * Copyright (C) 2021-2022 Bruno Raoult ("br")
  * Licensed under the GNU General Public License v3.0 or later.
  * Some rights reserved. See COPYING.
  *
@@ -24,14 +24,12 @@
 #ifdef DEBUG_DEBUG
 void debug_init(u32 level);
 void debug_level_set(u32 level);
-void debug_devel_set(u32 level);
 void _printf debug(u32 level, bool timestamp,
                    u32 indent, const char *src,
                    u32 line, const char *, ...);
 #else  /* DEBUG_DEBUG */
 static inline void debug_init(_unused u32 level) {}
 static inline void debug_level_set(_unused u32 level) {}
-static inline void debug_devel_set(_unused u32 level) {}
 static inline void _printf debug(_unused u32 level, _unused bool timestamp,
                                  _unused u32 indent, _unused const char *src,
                                  _unused u32 line, const char *, ...) {}
