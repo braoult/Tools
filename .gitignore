@@ -1,0 +1,9 @@
+/.ccls-cache/
+/*.c
+/*.sh
+/COPYING.*
+/license-*
+/test/
+/todo/
+/c/lib/
+/c/obj/
