@@ -597,8 +597,8 @@ done | column -N DEV1,DEV2,LABEL1,LABEL2,FS1,FS2,SVALID\?,DVALID\?,ROOT -t -o " 
 
 check_fstab || exit 1
 
-RSYNCOPTS="-axH --delete --delete-excluded"
 FILTER=--filter="dir-merge .rsync-disk-copy"
+declare -a RSYNCOPTS=(-axH "$FILTER" --delete --delete-excluded)
 # copy loop
 for ((i=0; i<${#LABELS[@]}; ++i)); do
     if [[ "${SRC_VALID_FS[$i]}" != y ]] || [[ "${DST_VALID_FS[$i]}" != y ]]; then
@@ -616,8 +616,15 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
     fi
     if [[ "$copy" == yes ]]; then
         mariadb_maybe_stop
+        status=0
         # shellcheck disable=SC2086
-        echorun_maybe rsync "$FILTER" ${RSYNCOPTS} "$SRCPART" "$DSTPART"
+        echorun_maybe rsync "${RSYNCOPTS[@]}" "$SRCPART" "$DSTPART" || status=$?
+        log -s "rsync status=%s\n" "$status"
+        if (( status != 24 && status != 0 )); then
+            log -s "rsync error %d" "$status"
+            exit 1
+        fi
+
         if [[ "$DSTROOTLABEL" == "${DSTLABELS[$i]}" ]]; then
             ROOTCOPIED=yes
             fix_fstab
