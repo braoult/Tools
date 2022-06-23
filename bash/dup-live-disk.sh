@@ -152,11 +152,11 @@ CMD="${0##*/}"
 # shellcheck disable=2034
 VALIDFS=(ext3 ext4 btrfs vfat reiserfs xfs zfs)
 
-function man {
+man() {
     sed -n '/^#%MAN_BEGIN%/,/^#%MAN_END%$/{//!s/^#[ ]\{0,1\}//p}' "$SCRIPT" | more
 }
 
-function usage {
+usage() {
     cat <<_EOF
 Usage: $CMD [OPTIONS] [SRC] DST
 Duplicate SRC (or live system) disk partitions to DST disk partitions.
@@ -211,7 +211,7 @@ log() {
 }
 
 # prints out and run (maybe) a command.
-function echorun_maybe {
+echorun_maybe() {
     if [[ "$DRYRUN" == 'yes' ]]; then
         log "dry-run: %s" "$*"
     else
@@ -246,7 +246,7 @@ yesno() {
 }
 
 # mariadb start/stop
-function mariadb_maybe_stop {
+mariadb_maybe_stop() {
     [[ $MARIADBSTOPPED == yes ]] && return 0
     if systemctl is-active --quiet mysql; then
         if [[ $MARIADB == ask ]]; then
@@ -268,7 +268,7 @@ function mariadb_maybe_stop {
     fi
 }
 
-function mariadb_maybe_start {
+mariadb_maybe_start() {
     if [[ $MARIADB == yes && $MARIADBSTOPPED == yes ]]; then
         #log -n "restarting mariadb/mysql... "
         echorun_maybe systemctl start mariadb
@@ -277,14 +277,14 @@ function mariadb_maybe_start {
     fi
 }
 
-function error_handler {
+error_handler() {
     local ERROR=$2
     log "FATAL: Error line $1, exit code $2. Aborting."
     exit "$ERROR"
 }
 trap 'error_handler $LINENO $?' ERR SIGHUP SIGINT SIGTERM
 
-function exit_handler {
+exit_handler() {
     local mnt
 
     # log "exit handler (at line $1)"
@@ -327,7 +327,7 @@ check_block_device() {
 }
 
 # check that /etc/fstab.DESTLABEL exists in SRC disk.
-function check_fstab {
+check_fstab() {
     local etc="${AUTOFS_DIR}/$SRCROOTLABEL/etc"
     local fstab="fstab.$DSTROOTLABEL"
     #if [[ "$FSTAB" != no ]]; then
@@ -340,7 +340,7 @@ function check_fstab {
     return 0
 }
 
-function fix_fstab {
+fix_fstab() {
     local fstab="${AUTOFS_DIR}/$DSTROOTLABEL/etc/fstab"
 
     #[[ ! -f "$fstab" ]] && log "Warning: DST fstab will be wrong !" && FSTAB=no
@@ -356,7 +356,7 @@ function fix_fstab {
 }
 
 # check if $1 is in array $2 ($2 is by reference)
-function in_array {
+in_array() {
     local elt=$1 i
     local -n arr=$2
     for ((i=0; i<${#arr[@]}; ++i)); do
