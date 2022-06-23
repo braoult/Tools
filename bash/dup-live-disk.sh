@@ -190,7 +190,7 @@ _EOF
 # -l, -s: long, or short prefix (default: none). Last one is used.
 # -t: timestamp
 # -n: no newline
-function log {
+log() {
     local timestr="" prefix="" opt=y newline=y
     while [[ $opt = y ]]; do
         case $1 in
@@ -302,7 +302,11 @@ function exit_handler {
 }
 trap 'exit_handler $LINENO' EXIT
 
-function check_block_device {
+# check_block_device - check a file system device
+# $1: device description
+# $2: more ('w' for writable)
+# $3: device
+check_block_device() {
     local devtype="$1"
     local mode="$2"
     local dev="$3"
@@ -365,7 +369,7 @@ function in_array {
 SRC=""
 DST=""
 SRCROOT=""
-ROOTPARTNUM=""
+SRCROOTPARTNUM=""
 AUTOFS_DIR=/mnt
 
 DRYRUN=no                                         # dry-run
@@ -454,9 +458,9 @@ while true; do
             shift
             ;;
         '-r'|'--root')
-            ROOTPARTNUM="$2"
-            if ! [[ "$ROOTPARTNUM" =~ ^[[:digit:]]+$ ]]; then
-                log "$CMD: $ROOTPARTNUM must be a partition number."
+            SRCROOTPARTNUM="$2"
+            if ! [[ "$SRCROOTPARTNUM" =~ ^[[:digit:]]+$ ]]; then
+                log "$CMD: $SRCROOTPARTNUM must be a partition number."
                 exit 1
             fi
             shift
@@ -485,25 +489,25 @@ fi
 
 case "$#" in
     1)
-        if [[ -n "$ROOTPARTNUM" ]]; then
+        if [[ -n "$SRCROOTPARTNUM" ]]; then
             log "$CMD: cannot have --root option for live system."
             log "Use '$CMD --help' or '$CMD --man' for help."
             exit 1
         fi
         # guess root partition disk name
         SRCROOT=$(findmnt -no SOURCE -M /)
-        ROOTPARTNUM=${SRCROOT: -1}
+        SRCROOTPARTNUM=${SRCROOT: -1}
         SRC="/dev/"$(lsblk -no pkname "$SRCROOT")
         DST="/dev/$1"
         ;;
     2)
-        if [[ -z "$ROOTPARTNUM" ]]; then
+        if [[ -z "$SRCROOTPARTNUM" ]]; then
             log "$CMD: missing --root option for non live system."
             log "Use '$CMD --help' or '$CMD --man' for help."
             exit 1
         fi
         SRC="/dev/$1"
-        SRCROOT="$SRC$ROOTPARTNUM"
+        SRCROOT="$SRC$SRCROOTPARTNUM"
         DST="/dev/$2"
         ;;
     0)
@@ -527,7 +531,8 @@ check_block_device "destination disk" w "$DST"
 check_block_device "source root partition" r "$SRCROOT"
 
 SRCROOTLABEL=$(lsblk -no label "$SRCROOT")
-ROOTLABEL=${SRCROOTLABEL:0:-1}
+# strip out last character
+ROOTLABEL=${SRCROOTLABEL%%?}
 
 # find out all partitions labels on SRC disk...
 # shellcheck disable=SC2207
@@ -550,16 +555,21 @@ for ((i=0; i<${#SRCLABELS[@]}; ++i)); do
     unset TMP TMPDEV TMPFS
 done
 
-DSTROOT="$DST$ROOTPARTNUM"
-check_block_device "destination root partition" w "$DSTROOT"
-DSTROOTLABEL=$(lsblk -no label "$DSTROOT")
-DSTCHAR=${DSTROOTLABEL: -1}
+# find out DST root partition
+# shellcheck disable=SC2207
+declare -a TMP_DSTLABELS=($(lsblk -lno  LABEL "$DST"))
 
-# check DSTROOTLABEL is compatible with ROOTLABEL
-if [[ "$DSTROOTLABEL" != "$ROOTLABEL$DSTCHAR" ]]; then
-    log "%s: Fatal: %s != %s%s." "$CMD" "$DSTROOTLABEL" "$ROOTLABEL" "$DSTCHAR"
-    exit 1
-fi
+for maybe_root in "${TMP_DSTLABELS[@]}"; do
+    log "rootlabel=%s maybe=%s" "$ROOTLABEL" "$maybe_root"
+    if [[ $maybe_root =~ ^${ROOTLABEL}.$ ]]; then
+        log "Found destination root label: $maybe_root"
+        DSTROOTLABEL=$maybe_root
+        DSTCHAR=${DSTROOTLABEL: -1}
+        DSTROOT=$(findfs LABEL="$DSTROOTLABEL")
+        check_block_device "destination root partition" w "$DSTROOT"
+        break
+    fi
+done
 
 declare -a DSTLABELS DSTDEVS DSTFS DST_VALID_FS
 # Do the same for corresponding DST partitions labels, device, and fstype
@@ -586,14 +596,17 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
     unset TMP TMPDEV TMPFS
 done
 
-for ((i=0; i<${#LABELS[@]}; ++i)); do
-    log -n "%s %s " "${SRCDEVS[$i]}" "${DSTDEVS[$i]}"
-    log -n "%s %s " "${SRCLABELS[$i]}" "${DSTLABELS[$i]}"
-    log -n "%s %s "  "${SRCFS[$i]}" "${DSTFS[$i]}"
-    log -n "%s %s "  "${SRC_VALID_FS[$i]}" "${DST_VALID_FS[$i]}"
-    [[ "$DSTROOTLABEL" == "${DSTLABELS[$i]}" ]] && log "*"
-    echo
-done | column -N DEV1,DEV2,LABEL1,LABEL2,FS1,FS2,SVALID\?,DVALID\?,ROOT -t -o " | "
+{
+    printf "DEV1 DEV2 LABEL1 LABEL2 FS1 FS2 SVALID\? DVALID\? ROOT\n"
+    for ((i=0; i<${#LABELS[@]}; ++i)); do
+        log -n "%s %s " "${SRCDEVS[$i]}" "${DSTDEVS[$i]}"
+        log -n "%s %s " "${SRCLABELS[$i]}" "${DSTLABELS[$i]}"
+        log -n "%s %s "  "${SRCFS[$i]}" "${DSTFS[$i]}"
+        log -n "%s %s "  "${SRC_VALID_FS[$i]}" "${DST_VALID_FS[$i]}"
+        [[ "$DSTROOTLABEL" == "${DSTLABELS[$i]}" ]] && log "*"
+        echo
+    done
+} | column -t
 
 check_fstab || exit 1
 
@@ -605,7 +618,7 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
         log "skipping label %s" "${LABELS[$i]}"
         continue
     fi
-    SRCPART="${AUTOFS_DIR}/${SRCLABELS[$i]}/"
+    SRCPART="$AUTOFS_DIR/${SRCLABELS[$i]}/"
     DSTPART="$AUTOFS_DIR/${DSTLABELS[$i]}"
 
     #log -n "%s -> %s : " "$SRCPART" "$DSTPART"
