@@ -632,7 +632,6 @@ for ((i=0; i<${#LABELS[@]}; ++i)); do
         status=0
         # shellcheck disable=SC2086
         echorun_maybe rsync "${RSYNCOPTS[@]}" "$SRCPART" "$DSTPART" || status=$?
-        log -s "rsync status=%s\n" "$status"
         if (( status != 24 && status != 0 )); then
             log -s "rsync error %d" "$status"
             exit 1
