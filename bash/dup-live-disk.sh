@@ -147,6 +147,7 @@
 # command line
 SCRIPT="$0"
 CMD="${0##*/}"
+export LC_ALL=C
 
 # valid filesystems
 # shellcheck disable=2034
