@@ -59,6 +59,14 @@ beforesync() {
         log -s "cannot get maria databases directory"
         exit 1
     fi
+
+    # dump users and permissions
+    log -n "dumping users and permissions... "
+    mysqldump --user=root --system=users > "$datadir/mariadb_users.sql"
+    log -n "compressing... "
+    gzip -f "$datadir/mariadb_users.sql"
+    log "done."
+
     rm -f "$datadir/$FILTERNAME"
     # shellcheck disable=2207
     if ! databases=( $(mysql -sN -u root -e "SHOW DATABASES;") ); then
