@@ -69,7 +69,7 @@
 #       Links to user's .bashrc backups will be put in /tmp/test. Files are in
 #       /mnt/backup, which contains backups of /export directory. The /tmp/test
 #       directory will be created if necessary.
-#       $ sync-view.sh -r /export -b /mnt/backup -d /tmptest ~/.bashrc
+#       $ sync-view.sh -r /export -b /mnt/backup -d /tmp/test ~/.bashrc
 #
 # AUTHOR
 #       Bruno Raoult.
