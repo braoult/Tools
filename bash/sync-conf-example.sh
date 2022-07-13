@@ -18,13 +18,17 @@
 # The only mandatory ones are SOURCEDIR, SERVER, and DESTDIR.
 
 ###### source directory full path, destination server and path.
-###### SERVER could user@host, or "local" if local machine
+###### SERVER could be user@host, or "local" if local machine
 # SOURCEDIR=""
 # SERVER=""
 # DESTDIR=""
 export SOURCEDIR=/example-srcdir
 export SERVER=root@backuphost
 export DESTDIR=/mnt/nas1/example-destdir
+
+###### backups mount point on local machine.
+###### it is used by sync-view.sh only.
+export BACKUPDIR=/mnt/backup-example-srcdir
 
 ###### backups to keep
 # NYEARS=3
