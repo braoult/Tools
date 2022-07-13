@@ -1,4 +1,4 @@
-/.ccls-cache/
+.ccls*
 /*.c
 /*.sh
 /COPYING.*
