@@ -32,14 +32,13 @@
 #          local.
 #
 #       -c, --config
-#          A sync.sh file where
-#          if non-existant. By default, a temporary directory will be created
-#          in /tmp.
+#          A sync.sh configuration file where the script could find variables
+#          SOURCEDIR (option '-r') and BACKUPDIR (option '-b').
 #
 #       -d, --destdir
 #          Directory which will hold links to actual files. It will be created
-#          if non-existant. By default, a temporary directory will be created
-#          in /tmp.
+#          if non-existant. If this option is missing, a temporary directory will
+#          be created in /tmp.
 #
 #       -h, --help
 #          Display short help and exit.
@@ -225,13 +224,8 @@ parse_opts() {
     return 0
 }
 
-check_dirs() {
+check_paths() {
     local dir tmp
-
-    log "ROOTDIR=[%s]" "$ROOTDIR"
-    log "BACKUPDIR=[%s]" "$BACKUPDIR"
-    log "TARGETDIR=[%s]" "$TARGETDIR"
-    log "FILE=[%s]" "$TARGET"
 
     [[ -z "$BACKUPDIR" ]] && printf "%s: backup directory is not set.\n" "$CMDNAME" && \
         ! usage
@@ -239,7 +233,7 @@ check_dirs() {
         ! usage
     if [[ -n "$TARGETDIR" ]]; then
         if [[ ! -e $TARGETDIR ]]; then
-            log "Creating destination directory %s." "$DESTDIR"
+            log "Creating destination directory %s." "$TARGETDIR"
             mkdir "$TARGETDIR"
         fi
     else
@@ -255,20 +249,25 @@ check_dirs() {
         fi
     done
     if ! pushd "$TARGETDIR" > /dev/null; then
-        printf "cannot change to directory %s.\n" "$DESTDIR"
+        printf "cannot change to directory %s.\n" "$TARGETDIR"
         exit 1
     fi
     # remove existing files
     if [[ -n "$(ls -A .)" ]]; then
-        log "Cleaning existing directory %s." "$DESTDIR"
+        log "Cleaning existing directory %s." "$TARGETDIR"
         for target in *; do
             rm "$target"
         done
     fi
+    log "ROOTDIR=[%s]" "$ROOTDIR"
+    log "BACKUPDIR=[%s]" "$BACKUPDIR"
+    log "TARGETDIR=[%s]" "$TARGETDIR"
+    log "FILE=[%s]" "$TARGET"
+
 }
 
 parse_opts "$@"
-check_dirs
+check_paths
 
 # add missing directories
 declare -a DIRS
@@ -277,7 +276,9 @@ log "DIRS=%s" "${DIRS[*]}"
 
 for file in "${DIRS[@]}"; do
     # src is file/dir in backup tree
-    src="$file${TARGET#"$ROOTDIR"}"
+    _tmp=${TARGET#"$ROOTDIR"}
+    [[ $_tmp =~ ^/.*$ ]] || _tmp="/$_tmp"
+    src="$file$_tmp"
     if [[ ! -e $src ]]; then
         log "Skipping non-existing %s" "$src"
         continue
@@ -305,7 +306,7 @@ for file in "${DIRS[@]}"; do
     INODES[$inode]=${INODES[$inode]:-$date}
 done
 
-{
+if [[ -n "$(ls -A .)" ]]; then
     printf "mod time|backup|inode|size|perms|path\n"
     # for file in {dai,week,month,year}ly-[0-9][0-9]; do
     for file in *; do
@@ -317,6 +318,7 @@ done
         printf "%s|%s|%s|%s|%s|%s\n" "$date" "$file" "$inode" "$size" "$perms" "$path"
         # ls -lrt "$TARGETDIR"
     done | sort -r
-} | column -t -s\|
+fi | column -t -s\|
 
+printf "temporary files directory is: %s\n" "$PWD"
 exit 0
