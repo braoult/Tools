@@ -16,15 +16,23 @@
 #       sync-view.sh - list file versions from rsync.sh backups.
 #
 # SYNOPSIS
-#       sync-view.sh [OPTIONS] FILE
+#       sync-view.sh [OPTIONS] TARGET
 #
 # DESCRIPTION
-#       List FILE versions from a sync.sh backup directory.
+#       List TARGET versions from a sync.sh backup directory.
 #
 # OPTIONS
 #       -1, --unique
-#          Skip duplicate files. This option do not apply if FILE is a
+#          Skip duplicate files. This option do not apply if TARGET is a
 #          directory.
+#
+#       -a, --absolute-target
+#          Do not try to resolve TARGET path.. By default, the script will try to
+#          guess TARGET absolute path. This is not possible if current system is
+#          different from the the one from which the backup was made, or if some
+#          path component are missing or were changed.
+#          If this option is used, TARGET must be an absolute path as it was on
+#          backuped machine.
 #
 #       -b, --backupdir=DIR
 #          DIR is the local mount point where the backups can be found. It can
@@ -87,6 +95,7 @@ BACKUPDIR=""                                      # the local view of backup dir
 TARGETDIR=""                                      # temp dir to hold links
 
 TARGET=""                                         # the file/dir to find
+RESOLVETARGET=y                                   # resolve TARGET
 UNIQUE=""                                         # omit duplicate files
 EXCLUDE=""                                        # regex for files to exclude
 VERBOSE=""                                        # -v option
@@ -97,7 +106,7 @@ set -o errexit
 #set -o xtrace
 
 usage() {
-    printf "usage: %s [-b BACKUPDIR][-c CONF][-d DSTDIR][-r ROOTDIR][-x EXCLUDE][-1hmv] file\n" "$CMDNAME"
+    printf "usage: %s [-b BACKUPDIR][-c CONF][-d DSTDIR][-r ROOTDIR][-x EXCLUDE][-1ahmv] file\n" "$CMDNAME"
     return 0
 }
 
@@ -127,7 +136,8 @@ log() {
                ;;
             t) timestr=$(date "+%F %T%z ")
                ;;
-            *) ;;
+            *)
+               ;;
         esac
     done
     shift $((OPTIND - 1))
@@ -139,11 +149,30 @@ log() {
     return 0
 }
 
+filetype() {
+    local file="$1" type="unknown"
+    if [[ ! -e "$file" ]]; then
+        type="missing"
+    elif [[ -f "$file" ]]; then
+        type="file"
+    elif [[ -d "$file" ]]; then
+        type="directory"
+    elif [[ -h "$file" ]]; then
+        type="symlink"
+    elif [[ -p "$file" ]]; then
+        type="fifo"
+    elif [[ -b "$file" || -c "$file" ]]; then
+        type="device"
+    fi
+    printf "%s" "$type"
+    return 0
+}
+
 # command-line parsing / configuration file read.
 parse_opts() {
     # short and long options
-    local sopts="1b:c:d:hmr:vx:"
-    local lopts="unique,backupdir:,config:,destdir:,help,man,root:,verbose,exclude:"
+    local sopts="1ab:c:d:hmr:vx:"
+    local lopts="absolute-target,unique,backupdir:,config:,destdir:,help,man,root:,verbose,exclude:"
     local tmp tmp_destdir="" tmp_destdir="" tmp_rootdir="" config
 
     if ! tmp=$(getopt -o "$sopts" -l "$lopts" -n "$CMD" -- "$@"); then
@@ -157,6 +186,9 @@ parse_opts() {
         case "$1" in
             -1|--unique)
                 UNIQUE=yes
+                ;;
+            '-a'|'--absolute-target')
+                RESOLVETARGET=""
                 ;;
             '-b'|'--backupdir')
                 tmp_backupdir="$2"
@@ -200,7 +232,6 @@ parse_opts() {
                 shift
                 break
                 ;;
-
             *)
                 usage
                 log 'Internal error!'
@@ -215,8 +246,12 @@ parse_opts() {
     # to find the relative path of TARGET in backup tree.
     # it may also contain BACKUPDIR variable, which the local root of backup
     # tree.
-    (( $# != 1 )) && ! usage
-    TARGET="$(realpath -L "$1")"
+    if (( $# != 1 )); then
+        usage
+        exit 1
+    fi
+    TARGET="$1"
+    [[ -z $RESOLVETARGET ]] && TARGET="$(realpath -L "$1")"
 
     [[ -n "$tmp_backupdir" ]] && BACKUPDIR="$tmp_backupdir"
     [[ -n "$tmp_destdir" ]] && TARGETDIR="$tmp_destdir"
@@ -262,8 +297,8 @@ check_paths() {
     log "ROOTDIR=[%s]" "$ROOTDIR"
     log "BACKUPDIR=[%s]" "$BACKUPDIR"
     log "TARGETDIR=[%s]" "$TARGETDIR"
-    log "FILE=[%s]" "$TARGET"
-
+    log "TARGET=[%s]" "$TARGET"
+    return 0
 }
 
 parse_opts "$@"
@@ -279,15 +314,17 @@ for file in "${DIRS[@]}"; do
     _tmp=${TARGET#"$ROOTDIR"}
     [[ $_tmp =~ ^/.*$ ]] || _tmp="/$_tmp"
     src="$file$_tmp"
+    #printf "src=%s\n" "$src"
     if [[ ! -e $src ]]; then
         log "Skipping non-existing %s" "$src"
         continue
     fi
-    #ls -lLi "$src"
+    #ls -li "$src"
 
     # last modification time in seconds since epoch
-    inode=$(stat --dereference --printf="%i\n" "$src")
-    date=$(stat --dereference --printf="%Y\n" "$src")
+    inode=$(stat --dereference --printf="%i" "$src")
+    date=$(stat --printf="%Y" "$src")
+    date_backup=$(stat --dereference --printf="%Y" "$file")
     # target is daily-01, etc...
     #target=$(date --date="@$date" "+%Y-%m-%d %H:%M")" - ${file#"$BACKUPDIR/"}"
     target="${file#"$BACKUPDIR/"}"
@@ -298,24 +335,37 @@ for file in "${DIRS[@]}"; do
         continue
     fi
     if [[ -z $UNIQUE || ! -v INODES[$inode] ]]; then
-        log "Adding inode %s (%s)" "$inode" "$target"
+        log "Adding %s inode %s (%s)" "$file" "$inode" "$target"
         ln -fs "$src" "$TARGETDIR/$target"
     else
         log "Skipping duplicate inode %s (%s)" "$inode" "$target"
     fi
     INODES[$inode]=${INODES[$inode]:-$date}
+    INODES[backup-$inode]=${INODES[backup-$inode]:-$date_backup}
 done
 
 if [[ -n "$(ls -A .)" ]]; then
-    printf "mod time|backup|inode|size|perms|path\n"
+    printf "type|modified|inode|size|perms|backup|backup date|path\n"
     # for file in {dai,week,month,year}ly-[0-9][0-9]; do
-    for file in *; do
-        inode=$(stat --dereference --printf="%i" "$file")
+    for symlink in *; do
+        file=$(readlink "$symlink")
+        printf "file=<%s> link=<%s>\n" "$file" "$symlink" >&2
+        inode=$(stat --printf="%i" "$file")
+        type=$(filetype "$file")
+        #links=$(stat --printf="%h" "$file")
         date=$(date --date="@${INODES[$inode]}" "+%Y-%m-%d %H:%M")
-        size=$(stat --dereference --printf="%s" "$file")
-        perms=$(stat --dereference --printf="%A" "$file")
-        path=$(readlink "$file")
-        printf "%s|%s|%s|%s|%s|%s\n" "$date" "$file" "$inode" "$size" "$perms" "$path"
+        backup_date=$(date --date="@${INODES[backup-$inode]}" "+%Y-%m-%d %H:%M")
+        size=$(stat --printf="%s" "$file")
+        perms=$(stat --printf="%A" "$file")
+        printf "%s|" "$type"
+        printf "%s|" "$date"
+        #printf "%s|" "$links"
+        printf "%s|" "$inode"
+        printf "%s|" "$size"
+        printf "%s|" "$perms"
+        printf "%s|" "$symlink"
+        printf "%s|" "$backup_date"
+        printf "%s\n" "$file"
         # ls -lrt "$TARGETDIR"
     done | sort -r
 fi | column -t -s\|
