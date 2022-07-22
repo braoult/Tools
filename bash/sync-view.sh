@@ -251,7 +251,7 @@ parse_opts() {
         exit 1
     fi
     TARGET="$1"
-    [[ -z $RESOLVETARGET ]] && TARGET="$(realpath -L "$1")"
+    [[ -z $RESOLVETARGET ]] || TARGET="$(realpath -L "$1")"
 
     [[ -n "$tmp_backupdir" ]] && BACKUPDIR="$tmp_backupdir"
     [[ -n "$tmp_destdir" ]] && TARGETDIR="$tmp_destdir"
@@ -260,7 +260,7 @@ parse_opts() {
 }
 
 check_paths() {
-    local dir tmp
+    local tmp
 
     [[ -z "$BACKUPDIR" ]] && printf "%s: backup directory is not set.\n" "$CMDNAME" && \
         ! usage
@@ -277,8 +277,8 @@ check_paths() {
         log "%s target directory created." "$TARGETDIR"
     fi
     for var in ROOTDIR BACKUPDIR TARGETDIR; do
-        dir=$var
-        if [[ ! -d "${!dir}" ]]; then
+        [[ $var = ROOTDIR && -z $RESOLVETARGET ]] && continue
+        if [[ ! -d "${!var}" ]]; then
             printf "%s is not a directory.\n" "$var"
             exit 1
         fi
@@ -349,7 +349,7 @@ if [[ -n "$(ls -A .)" ]]; then
     # for file in {dai,week,month,year}ly-[0-9][0-9]; do
     for symlink in *; do
         file=$(readlink "$symlink")
-        printf "file=<%s> link=<%s>\n" "$file" "$symlink" >&2
+        #printf "file=<%s> link=<%s>\n" "$file" "$symlink" >&2
         inode=$(stat --printf="%i" "$file")
         type=$(filetype "$file")
         #links=$(stat --printf="%h" "$file")
