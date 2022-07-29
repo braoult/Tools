@@ -35,13 +35,16 @@
 #          backuped machine.
 #
 #       -b, --backupdir=DIR
-#          DIR is the local mount point where the backups can be found. It can
-#          be a network mount, or the destination directory if the backup was
-#          local.
+#          DIR is the local path where the backups can be found. It can be a
+#          network mount, or the destination directory if the backup was local.
+#          This option is mandatory.
 #
 #       -c, --config
 #          A sync.sh configuration file where the script could find variables
 #          SOURCEDIR (option '-r') and BACKUPDIR (option '-b').
+#          If this option is missing, the script will try to find a .syncrc file
+#          in DIR/daily-01 directory, where DIR is the local path of backups
+#          (option -b).
 #
 #       -d, --destdir
 #          Directory which will hold links to actual files. It will be created
@@ -73,6 +76,10 @@
 #       configuration file named s.conf. A temporary directory will be created
 #       in /mnt to handle links to actual files.
 #       $ sync-view.sh -c s.conf -b /mnt/backup -x "^(yearly|monthly-0[3-9]).*$" ~/.bashrc
+#
+#       The simplest invocation: the versions of users' .bashrc will be retrieved
+#       in backups from /mnt/backup. A /mnt/backup/daily-01/.syncrc must exist.
+#       $ sync-view.sh -b /mnt/backup ~/.bashrc
 #
 #       Links to user's .bashrc backups will be put in /tmp/test. Files are in
 #       /mnt/backup, which contains backups of /export directory. The /tmp/test
@@ -149,16 +156,21 @@ log() {
     return 0
 }
 
+# filetype() - get file type
+#
+# $1: the file to check
+#
+# @return: 0, output a string with file type on stdout.
 filetype() {
     local file="$1" type="unknown"
     if [[ ! -e "$file" ]]; then
         type="missing"
+    elif [[ -h "$file" ]]; then
+        type="symlink"
     elif [[ -f "$file" ]]; then
         type="file"
     elif [[ -d "$file" ]]; then
         type="directory"
-    elif [[ -h "$file" ]]; then
-        type="symlink"
     elif [[ -p "$file" ]]; then
         type="fifo"
     elif [[ -b "$file" || -c "$file" ]]; then
@@ -172,8 +184,8 @@ filetype() {
 parse_opts() {
     # short and long options
     local sopts="1ab:c:d:hmr:vx:"
-    local lopts="absolute-target,unique,backupdir:,config:,destdir:,help,man,root:,verbose,exclude:"
-    local tmp tmp_destdir="" tmp_destdir="" tmp_rootdir="" config
+    local lopts="unique,absolute-target,backupdir:,config:,destdir:,help,man,root:,verbose,exclude:"
+    local tmp tmp_destdir="" tmp_destdir="" tmp_rootdir="" tmp_config=""
 
     if ! tmp=$(getopt -o "$sopts" -l "$lopts" -n "$CMD" -- "$@"); then
         log "Use '$CMD --help' or '$CMD --man' for help."
@@ -195,14 +207,7 @@ parse_opts() {
                 shift
                 ;;
             '-c'|'--config')
-                config="$2"
-                if [[ ! -r "$config" ]]; then
-                    printf "%s: Cannot open %s file. Exiting.\n" "$CMDNAME" "$config"
-                    exit 9
-                fi
-                # shellcheck source=sync-conf-example.sh
-                source "$config"
-                [[ -n "$SOURCEDIR" ]] && ROOTDIR="$SOURCEDIR"
+                tmp_config="$2"
                 shift
                 ;;
             '-d'|'--destdir')
@@ -240,7 +245,6 @@ parse_opts() {
         esac
         shift
     done
-
     # Now check remaining arguments (configuration file and searched file).
     # The configuration file contains the variable SOURCEDIR, which will allow
     # to find the relative path of TARGET in backup tree.
@@ -251,7 +255,21 @@ parse_opts() {
         exit 1
     fi
     TARGET="$1"
-    [[ -z $RESOLVETARGET ]] || TARGET="$(realpath -L "$1")"
+    [[ -z $RESOLVETARGET ]] || TARGET="$(realpath -L "$TARGET")"
+
+    # if $config is not set, look for .syncrc in BACKUPDIR
+    tmp_config=${tmp_config:-$tmp_backupdir/daily-01/.syncrc}
+    if [[ -z "$tmp_config" ]]; then
+        printf "%s: Missing configuration file.\n" "$CMDNAME"
+        exit 10
+    elif [[ ! -r "$tmp_config" ]]; then
+        printf "%s: Cannot open %s file. Exiting.\n" "$CMDNAME" "$tmp_config"
+        exit 9
+    fi
+
+    # shellcheck source=sync-conf-example.sh
+    source "$tmp_config"
+    [[ -n "$SOURCEDIR" ]] && ROOTDIR="$SOURCEDIR"
 
     [[ -n "$tmp_backupdir" ]] && BACKUPDIR="$tmp_backupdir"
     [[ -n "$tmp_destdir" ]] && TARGETDIR="$tmp_destdir"
@@ -345,7 +363,7 @@ for file in "${DIRS[@]}"; do
 done
 
 if [[ -n "$(ls -A .)" ]]; then
-    printf "type|modified|inode|size|perms|backup|backup date|path\n"
+    printf "backup date      (backup)|last changed|inode|size|perms|type|path\n"
     # for file in {dai,week,month,year}ly-[0-9][0-9]; do
     for symlink in *; do
         file=$(readlink "$symlink")
@@ -357,14 +375,13 @@ if [[ -n "$(ls -A .)" ]]; then
         backup_date=$(date --date="@${INODES[backup-$inode]}" "+%Y-%m-%d %H:%M")
         size=$(stat --printf="%s" "$file")
         perms=$(stat --printf="%A" "$file")
-        printf "%s|" "$type"
+        printf "%s (%s)|" "$backup_date" "$symlink"
         printf "%s|" "$date"
         #printf "%s|" "$links"
         printf "%s|" "$inode"
         printf "%s|" "$size"
         printf "%s|" "$perms"
-        printf "%s|" "$symlink"
-        printf "%s|" "$backup_date"
+        printf "%s|" "$type"
         printf "%s\n" "$file"
         # ls -lrt "$TARGETDIR"
     done | sort -r

@@ -16,12 +16,13 @@
 #       sync.sh - a backup utility using ssh/rsync facilities.
 #
 # SYNOPSIS
-#       sync.sh [OPTIONS] CONFIG
+#       sync.sh [OPTIONS] [SOURCE_DIR]
 #
 # DESCRIPTION
 #       Perform a backup to a local or remote destination, keeping different
 #       versions (daily, weekly, monthly, yearly). All options can be set in
-#       CONFIG file, which is mandatory.
+#       a mandatory configuration file, which is either SOURCE_DIR/.syncrc,
+#       either set with the '-c' option. See option '-c' below.
 #       The synchronization is make with rsync(1), and only files changed or
 #       modified are actually copied; files which are identical with previous
 #       backup are hard-linked to previous one.
@@ -42,6 +43,10 @@
 #          depending on the current day or date: daily backup every day,
 #          weekly every sunday, monthly every first day of month, and yearly
 #          every Jan 1st.
+#       -c CONFIG
+#          Use CONFIG as configuration file. See sync-conf-example.sh.
+#          If this option is used, the script will ignore SOURCE_DIR/.syncrc
+#          file.
 #       -D
 #          By default, this script re-routes all outputs (stdout and stderr)
 #          to a temporary file after basic initialization (mainly options
@@ -221,7 +226,8 @@ man() {
 }
 
 usage() {
-    printf "usage: %s [-a PERIOD][-DflmnruvzZ] config-file\n" "$CMDNAME"
+    printf "usage: %s [-a PERIOD][-c CONFIG][-DflmnruvzZ] [backup_directory]\n" \
+           "$CMDNAME"
     exit 8
 }
 
@@ -417,9 +423,11 @@ exit_handler() {
 ###############################################################################
 # command-line parsing / configuration file read.
 parse_opts() {
+    local _config="" _backup_dir=""
+
     OPTIND=0
     shopt -s extglob                # to parse "-a" option
-    while getopts a:DflmnruvzZ todo; do
+    while getopts a:c:DflmnruvzZ todo; do
         case "$todo" in
             a)
                 # we use US (Unit Separator, 0x1F, control-_) as separator
@@ -436,6 +444,13 @@ parse_opts() {
                            usage
                     esac
                 done
+                ;;
+            c)
+                _config="$OPTARG"
+                if [[ ! -f "$_config" ]]; then
+                    printf "%s: invalid %s configuration file\n" "$CMDNAME" "$_config"
+                    usage
+                fi
                 ;;
             f)
                 FILTERLNK=y
@@ -470,20 +485,34 @@ parse_opts() {
                 ;;
         esac
     done
-    # Now check remaining argument (configuration file), which should be unique,
-    # and read the file.
+    # Now check remaining argument (backup directory)
     shift $((OPTIND - 1))
-    (( $# != 1 )) && usage
-    CONFIG="$1"
 
-    if [[ ! -r "$CONFIG" ]]; then
-        printf "%s: Cannot open $CONFIG file. Exiting.\n" "$CMDNAME"
+    (( $# > 1 )) && usage
+    if (( $# == 1 )); then
+        _backup_dir="$1"
+        if [[ ! -d $_backup_dir ]]; then
+            printf "%s: %s: not a directory\n" "$CMDNAME" "$_backup_dir"
+            usage
+        fi
+        [[ -f "$_backup_dir/.syncrc" ]] && _config=${_config:-"$_backup_dir/.syncrc"}
+    fi
+
+    # see https://unix.stackexchange.com/questions/406216
+    CONFIG=$(realpath -sm "$_config")
+    if [[ -z "$CONFIG" ]]; then
+        printf "%s: Missing configuration file\n" "$CMDNAME"
+        exit 9
+    elif [[ ! -r "$CONFIG" ]]; then
+        printf "%s: Cannot open %s file\n" "$CMDNAME" "$CONFIG"
         exit 9
     fi
     # shellcheck source=sync-conf-example.sh
     source "$CONFIG"
-
     LOCKDIR="/tmp/$CMDNAME-$HOSTNAME-${CONFIG##*/}.lock"
+
+    # _backup_dir takes precedence on SOURCEDIR (useless ?)
+    SOURCEDIR=${_backup_dir:-$SOURCEDIR}
 }
 
 parse_opts "$@"
