@@ -509,10 +509,11 @@ parse_opts() {
     fi
     # shellcheck source=sync-conf-example.sh
     source "$CONFIG"
-    LOCKDIR="/tmp/$CMDNAME-$HOSTNAME-${CONFIG##*/}.lock"
 
     # _backup_dir takes precedence on SOURCEDIR (useless ?)
     SOURCEDIR=${_backup_dir:-$SOURCEDIR}
+
+    LOCKDIR="/tmp/$CMDNAME-$HOSTNAME${SOURCEDIR////-}.lock"
 }
 
 parse_opts "$@"
@@ -558,13 +559,13 @@ TODO=()
 [[ $YEARLY  = y ]] && (( NYEARS  > 0 )) && TODO+=(yearly  "$NYEARS")
 
 log -l -t "Starting %s" "$CMDNAME"
-log "Bash version: %s.%s.%s" \
-    "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}" "${BASH_VERSINFO[2]}"
+log "Bash version: %s.%s.%s" "${BASH_VERSINFO[@]:0:3}"
 log "Hostname: %s" "$HOSTNAME"
 log "Operating System: %s on %s" "$(uname -sr)" "$(uname -m)"
 log "Config : %s\n" "$CONFIG"
 log "Src dir: %s" "$SOURCEDIR"
 log "Dst dir: %s" "$SERVER:$DESTDIR"
+log "Lock dir: %s" "$LOCKDIR"
 log "Actions: %s" "${TODO[*]}"
 if (( ${#RSYNCOPTS[@]} )); then
     log -n "Rsync additional options (%d): " "${#RSYNCOPTS[@]}"
