@@ -207,6 +207,10 @@ parse_opts() {
                 shift
                 ;;
             '-c'|'--config')
+                # The configuration file contains the variable SOURCEDIR, which will allow
+                # to find the relative path of TARGET in backup tree.
+                # it may also contain BACKUPDIR variable, which the local root of backup
+                # tree.
                 tmp_config="$2"
                 shift
                 ;;
@@ -245,11 +249,7 @@ parse_opts() {
         esac
         shift
     done
-    # Now check remaining arguments (configuration file and searched file).
-    # The configuration file contains the variable SOURCEDIR, which will allow
-    # to find the relative path of TARGET in backup tree.
-    # it may also contain BACKUPDIR variable, which the local root of backup
-    # tree.
+    # Now check remaining argument (searched file).
     if (( $# != 1 )); then
         usage
         exit 1
