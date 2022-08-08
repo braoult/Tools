@@ -96,8 +96,8 @@ declare pw_sep=":"
 declare pw_cap=""
 declare pw_dict=""
 declare pw_copy=""
-declare pwd_gui=""
-declare pwd_verbose=""
+declare pw_gui=""
+declare pw_verbose=""
 declare -A pw_commands=()
 declare -a pw_command=()
 
@@ -121,7 +121,7 @@ man() {
 #   log -s "foo"
 log() {
     local timestr="" prefix="" newline=y todo OPTIND
-    [[ -z $pwd_verbose ]] && return 0
+    [[ -z $pw_verbose ]] && return 0
     while getopts lsnt todo; do
         case $todo in
             l) prefix=$(printf "*%.s" {1..30})
@@ -279,8 +279,7 @@ pwd_mac() {
     local str="" _str=""
 
     for ((i = 0; i < n; ++i)); do
-        printf -v _str  "%s%s" "$sep" "$(rnd_hex)"
-        str+="$_str"
+        str+="$sep$(rnd_hex)"
         sep="$_sep"
     done
     [[ -n $_cap ]] && str=${str^^}
@@ -338,10 +337,11 @@ print_command() {
 #
 # @return: 0
 gui_passwd() {
+    local -a _command=("$@")
     local passwd="" res=0
 
     while
-        passwd=$(rnd_mac "$@")
+        passwd=$("${_command[@]}")
         yad --title="Password Generator" --text-align=center --text="$passwd" \
             --borders=20 --button=gtk-copy:0 --button=gtk-refresh:1 \
             --button=gtk-ok:252 --window-icon=dialog-password
@@ -382,8 +382,7 @@ parse_opts() {
                 shift
                 ;;
             '-g'|'--gui')
-                pwd_gui="$2"
-                shift
+                pw_gui="$2"
                 ;;
             '-h'|'--help')
                 usage
@@ -398,7 +397,7 @@ parse_opts() {
                 shift
                 ;;
             '-v'|'--verbose')
-                pwd_verbose=y
+                pw_verbose=y
                 ;;
             '--')
                 shift
@@ -456,15 +455,15 @@ parse_opts() {
         shift
     fi
     [[ -n $tmp_length ]] && pw_length=$tmp_length
-    if ! (( tmp_length )); then
+    if ! (( pw_length )); then
         printf "%s: Bad '%d' length.\n" "$CMDNAME" "$tmp_length"
         usage
         exit 1
     fi
-    [[ -n $tmp_sep ]] && pw_sep=$tmp_sep
-    [[ $pw_sep = 0 ]] && pw_sep=""
-    [[ -n $tmp_cap ]] && pw_cap=$tmp_cap
-    [[ -n $tmp_dict ]] && pw_dict=$tmp_dict
+    [[ -n $tmp_sep   ]] && pw_sep=$tmp_sep
+    [[ $pw_sep = "0" ]] && pw_sep=""
+    [[ -n $tmp_cap   ]] && pw_cap=$tmp_cap
+    [[ -n $tmp_dict  ]] && pw_dict=$tmp_dict
 }
 
 parse_opts "$@"
@@ -480,6 +479,8 @@ if [[ -z $pw_gui ]]; then
         printf "%s" "$passwd" | xsel -bi
     fi
     printf "%s\n" "$passwd"
+else
+    gui_passwd "${pw_command[@]}"
 fi
 
 exit 0
