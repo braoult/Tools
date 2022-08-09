@@ -31,11 +31,15 @@
 #          defaults to 6. The default ":" delimiter can be changed with "-s"
 #          option.
 #          This is the default option.
-#       pincode
-#          A numeric password. default LENGTH is 4, with no separator.
 #       passphrase
 #          Generate words from a diceware-like dictionary. Length is the number
 #          of words ans defaults to 6.
+#       pincode
+#          A numeric password. default LENGTH is 4, with no separator.
+#       string
+#          Password will be a string taken from different character ranges.
+#          By default, alphabetic characters and digits. See -x option for
+#          different character sets.
 #
 # OPTIONS
 #       -c, --copy
@@ -68,6 +72,18 @@
 #       -v, --verbose
 #          Print messages on what is being done.
 #
+#       -x, --extended=RANGE
+#          Specify the ranges of string type. Default is "a1", as lower case
+#          alphabetic characters (a-z) and digits (0-9). RANGE  is a string
+#          composed of:
+#          are:
+#          a: lower case alphabetic characters (a-z)
+#          A: upper case alphabetic characters (A-Z)
+#          1: digits (0-9)
+#          x: extended characters set 1: #$%&@^`~.,:;{[()]}
+#          y: extended characters set 2: "'\/|_-<>*+!?=
+#          k: japanese katakana: TODO
+#
 # EXAMPLES
 #       TODO
 #
@@ -89,6 +105,14 @@ SCRIPT="$0"                                       # full path to script
 CMDNAME=${0##*/}                                  # script name
 SHELLVERSION=$(( BASH_VERSINFO[0] * 10 + BASH_VERSINFO[1] ))
 
+# character sets
+declare pw_a="abcdefghijklmnopqrstuvwxyz"
+declare pw_A="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+declare pw_1="0123456789"
+declare pw_x='#$%&@^`~.,:;{[()]}'\\
+declare pw_y=\''"\/|_-<>*+!?='
+declare pw_k="あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん"
+
 # default type, length, separator
 declare pw_type="mac"
 declare pw_length=6
@@ -98,11 +122,12 @@ declare pw_dict=""
 declare pw_copy=""
 declare pw_gui=""
 declare pw_verbose=""
+declare pw_charset="$pw_a$pw_A$pw_1"
 declare -A pw_commands=()
 declare -a pw_command=()
 
 usage() {
-    printf "usage: %s [-s CHAR][-d DICT][-Ccgmv] [TYPE] [LENGTH]\n" "$CMDNAME"
+    printf "usage: %s [-s CHAR][-d DICT][-x CHARSET][-Ccgmv] [TYPE] [LENGTH]\n" "$CMDNAME"
     return 0
 }
 
@@ -318,6 +343,30 @@ pwd_passphrase() {
 }
 pw_commands["passphrase"]=pwd_passphrase
 
+# pwd_string() - generate a string from a charset
+# $1: Integer, the string length
+# $5: The charset
+#
+# @return: 0, output a random string from $5 charset.
+pwd_string() {
+    local -i i n="$1" _rnd=0 _lcharset=0
+    local sep="" _charset="${5}" _char=""
+    local str="" _str="" _key="" _dummy=""
+
+    _lcharset=${#_charset}
+    log "string setup: len=%d charset[%d]=[%s]" "$n" "$_lcharset" "$_charset"
+
+    for ((i = 0; i < n; ++i)); do
+        _rnd=$(rnd "$_lcharset")
+        _char=${_charset:$_rnd:1}
+        log "char pos=%d [%s]" "$_rnd" "$_char"
+        str+="$_char"
+    done
+    printf "%s" "$str"
+    return 0
+}
+pw_commands["string"]=pwd_string
+
 # print command() - print a pwd_command parameters
 # $1: reference of pwd_command array
 #
@@ -357,10 +406,11 @@ gui_passwd() {
 
 parse_opts() {
     # short and long options
-    local sopts="cCd:ghms:v"
-    local lopts="copy,capitalize,dictionary:,gui,help,man,separator:,verbose"
+    local sopts="cCd:ghms:vx:"
+    local lopts="copy,capitalize,dictionary:,gui,help,man,separator:,verbose,extended:"
     # set by options
-    local tmp="" tmp_length="" tmp_sep="" tmp_cap="" tmp_dict=""
+    local tmp="" tmp_length="" tmp_sep="" tmp_cap="" tmp_dict="" tmp_chars=""
+    local  -i  i
 
     if ! tmp=$(getopt -o "$sopts" -l "$lopts" -n "$CMD" -- "$@"); then
         log "Use '$CMD --help' or '$CMD --man' for help."
@@ -382,7 +432,11 @@ parse_opts() {
                 shift
                 ;;
             '-g'|'--gui')
-                pw_gui="$2"
+                if ! type -P "yad" > /dev/null; then
+                    printf "%s: Please install 'yad' package tu use 'g' option.\n" \
+                           "$CMDNAME"
+                fi
+                pw_gui="y"
                 ;;
             '-h'|'--help')
                 usage
@@ -398,6 +452,22 @@ parse_opts() {
                 ;;
             '-v'|'--verbose')
                 pw_verbose=y
+                ;;
+            '-x'|'--extended')
+                for (( i = 0; i < ${#2}; ++i)); do
+                    case "${2:$i:1}" in
+                        'a') tmp_chars+="$pw_a" ;;
+                        'A') tmp_chars+="$pw_A" ;;
+                        '1') tmp_chars+="$pw_1" ;;
+                        'x') tmp_chars+="$pw_x" ;;
+                        'y') tmp_chars+="$pw_y" ;;
+                        'k') tmp_chars+="$pw_k" ;;
+                        *) printf "unknown character set '%s\n" "${2:$i:1}"
+                           usage
+                           exit 1
+                    esac
+                done
+                shift
                 ;;
             '--')
                 shift
@@ -438,6 +508,11 @@ parse_opts() {
                 [[ -z $tmp_sep ]] && tmp_sep=" "
                 [[ -z $tmp_cap ]] && tmp_cap=""
                 ;;
+            string)
+                pw_type="string"
+                tmp_length=10
+                [[ -n $tmp_chars ]] &&  pw_charset="$tmp_chars"
+                ;;
             *)
                 printf "%s: Unknown '%s' password type.\n" "$CMDNAME" "$type"
                 usage
@@ -468,7 +543,8 @@ parse_opts() {
 
 parse_opts "$@"
 
-pw_command=("${pw_commands[$pw_type]}" "$pw_length" "$pw_sep" "$pw_cap" "$pw_dict")
+pw_command=("${pw_commands[$pw_type]}" "$pw_length" "$pw_sep" "$pw_cap" "$pw_dict"
+           "$pw_charset")
 
 #printf "command=%d %s\n" "${#pw_command[@]}" "+${pw_command[*]}+"
 print_command pw_command
