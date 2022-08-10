@@ -27,7 +27,7 @@
 #       mac
 #          A "xx-xx-xx-xx-xx-xx" type address, where 'x' are hexadecimal digits
 #          (ranges 0-9 and a-h).
-#          Length is the number of "bytes" (groups od 2 hehexademal digits), and
+#          Length is the number of "bytes" (groups of 2 hexadecimal digits), and
 #          defaults to 6. The default ":" delimiter can be changed with "-s"
 #          option.
 #          This is the default option.
@@ -51,8 +51,10 @@
 #          if separator is set to null-string (--separator=0).
 #          Mac: use capital hexadecimal digits.
 #
-#       -d, --dictionary=file
-#          Use file as wordlist file. Default is
+#       -d, --dictionary=FILE
+#          Use FILE as wordlist file. Default is eff_large_wordlist.txt.
+#          FILE will be searched in these directories : root, current directory,
+#          and /usr/local/share/br-tools/gen-password directory.
 #
 #       -g, --gui
 #          Will use a GUI (yad based) to propose the password. This GUI
@@ -73,16 +75,20 @@
 #          Print messages on what is being done.
 #
 #       -x, --extended=RANGE
-#          Specify the ranges of string type. Default is "a1", as lower case
-#          alphabetic characters (a-z) and digits (0-9). RANGE  is a string
-#          composed of:
-#          are:
+#          Specify the ranges of string type. Default is "a:1:a1", as lower case
+#          alphabetic characters (a-z) and digits (0-9), with at least one letter
+#          and one digit. RANGE  is a string composed of:
 #          a: lower case alphabetic characters (a-z)
 #          A: upper case alphabetic characters (A-Z)
+#          e: extra European characters (e.g. À, É, é, Ï, ï, Ø, ø...)
 #          1: digits (0-9)
 #          x: extended characters set 1: #$%&@^`~.,:;{[()]}
 #          y: extended characters set 2: "'\/|_-<>*+!?=
-#          k: japanese katakana: TODO
+#          k: japanese hiragana: あいうえおかき...
+#          When a RANGED character is followed by ':' exactly one character of
+#          this range will appear in generated password: If we want two or more
+#          digits, the syntax would be '-x1:1:1'.
+#
 #
 # EXAMPLES
 #       TODO
@@ -105,13 +111,18 @@ SCRIPT="$0"                                       # full path to script
 CMDNAME=${0##*/}                                  # script name
 SHELLVERSION=$(( BASH_VERSINFO[0] * 10 + BASH_VERSINFO[1] ))
 
+export LC_CTYPE="C.UTF-8"                         # to handle non ascii chars
+
 # character sets
-declare pw_a="abcdefghijklmnopqrstuvwxyz"
-declare pw_A="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-declare pw_1="0123456789"
-declare pw_x='#$%&@^`~.,:;{[()]}'\\
-declare pw_y=\''"\/|_-<>*+!?='
-declare pw_k="あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん"
+declare -A pw_charsets=(
+    [a]="abcdefghijklmnopqrstuvwxyz"
+    [A]="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    [1]="0123456789"
+    [e]="âêîôûáéíóúàèìòùäëïöüãõñçøÂÊÎÔÛÁÉÍÓÚÀÈÌÒÙÄËÏÖÜÃÕÑÇØ¡¿"
+    [x]='#$%&@^`~.,:;{[()]}'\\
+    [y]=\''"\/|_-<>*+!?='
+    [k]="あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん"
+)
 
 # default type, length, separator
 declare pw_type="mac"
@@ -122,12 +133,14 @@ declare pw_dict=""
 declare pw_copy=""
 declare pw_gui=""
 declare pw_verbose=""
-declare pw_charset="$pw_a$pw_A$pw_1"
+declare pw_charset="a:A:1:aA1"
+
 declare -A pw_commands=()
 declare -a pw_command=()
 
 usage() {
     printf "usage: %s [-s CHAR][-d DICT][-x CHARSET][-Ccgmv] [TYPE] [LENGTH]\n" "$CMDNAME"
+    printf  "Use '%s --man' for more help\n" "$CMDNAME"
     return 0
 }
 
@@ -170,6 +183,34 @@ log() {
     return 0
 }
 
+# check_dict() - check for foctionary file
+# $1: the dictionary filename (variable reference).
+#
+# @return: 0 on success, $1 will contain full path to dictionary.
+# @return: 1 if not found
+check_dict() {
+    local -n dict="$1"
+    local tmp_dir tmp_dict
+
+    if [[ -n "$dict" ]]; then
+        for tmp_dir in / ./ /usr/local/share/br-tools/gen-password/; do
+            tmp_dict="$tmp_dir$dict"
+            log -n "checking for %s dictionary... " "$tmp_dict"
+            if [[ -f "$tmp_dict" ]]; then
+                log "found."
+                dict="$tmp_dict"
+                return 0
+            else
+                log "not found."
+            fi
+        done
+        printf "cannot find '%s' dictionary file\n" "$dict"
+        exit 1
+    fi
+    return 0
+}
+
+
 # srandom() - use RANDOM to simulate SRANDOM
 # $1: Reference of variable to hold result
 #
@@ -199,6 +240,27 @@ rnd() {
         srandom ret
     fi
     printf "%d" "$(( ret % mod ))"
+}
+
+# shuffle() - shuffle  a string
+# $1: The string to shuffle
+#
+# The string is shuffled using the Fisher–Yates shuffle method :
+# https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
+#
+# @return: 0,  output the shuffled string to stdout.
+shuffle() {
+    local _str="$1"
+    local _res=""
+    local -i _i _len=${#_str} _cur=0
+
+    for (( _i = _len ; _i > 0; --_i )); do
+        _cur=$(rnd "$_i")
+        _res+=${_str:$_cur:1}
+        _str="${_str:0:_cur}${_str:_cur+1}"
+    done
+    printf "%s" "$_res"
+    return  0
 }
 
 # rnd_hex() - get a random 2-digits hex number
@@ -236,17 +298,19 @@ rnd_word() {
 
 # rnd_charset() - get a random string from a charset
 # $1: A string with characters to choose from
-# $2: An integer
+# $2: An integer, the length of returned string
 #
 # @return: 0, output a random string from charset $1, with length $2.
 rnd_charset() {
     local charset="$1" ret=""
     local -i len=$2 _i
 
+    log "rnd_charset: %d from  '%s'" "$len" "$charset"
     for ((_i=0; _i<len; ++_i)); do
         ret+=${charset:$(rnd ${#charset}):1}
     done
 
+    log "rnd_charset: return '%s'" "$ret"
     printf "%s" "$ret"
 }
 
@@ -345,24 +409,46 @@ pw_commands["passphrase"]=pwd_passphrase
 
 # pwd_string() - generate a string from a charset
 # $1: Integer, the string length
-# $5: The charset
+# $5: The charset definition (e.g. "a:1:")
 #
 # @return: 0, output a random string from $5 charset.
 pwd_string() {
-    local -i i n="$1" _rnd=0 _lcharset=0
-    local sep="" _charset="${5}" _char=""
-    local str="" _str="" _key="" _dummy=""
+    local -i i n="$1"
+    local _charset="${5}" _allchars=""
+    local str="" _c="" _char=""
 
-    _lcharset=${#_charset}
-    log "string setup: len=%d charset[%d]=[%s]" "$n" "$_lcharset" "$_charset"
+    log "string setup: len=%d charset=[%s]" "$n" "$_charset"
+    # finds out mandatory characters and build final charset
+    log -n "mandatory chars:"
+    for (( i = 0; i < ${#_charset}; ++i )); do
+        _c="${_charset:i:1}"
+        if [[ ${_charset:i+1:1} == ":" ]]; then
+            _char=$(rnd_charset "${pw_charsets[$_c]}" 1)
+            log -n " [%s]" "$_char"
+            str+="$_char"
+            (( i++ ))
+        else
+            _allchars+=${pw_charsets[$_c]}
+        fi
+    done
+    log ""
+    if (( ${#str} < n && ${#_allchars} == 0 )); then
+        printf "Fatal: No charset to choose from ! Please check  '-x' option."
+        exit 1
+    fi
 
-    for ((i = 0; i < n; ++i)); do
-        _rnd=$(rnd "$_lcharset")
-        _char=${_charset:$_rnd:1}
-        log "char pos=%d [%s]" "$_rnd" "$_char"
+    log -n "generating %d remaining chars:" "$((n-${#str}))"
+    for ((i = ${#str}; i < n; ++i)); do
+        _char=$(rnd_charset "$_allchars" 1)
+        log -n " [%s]" "$_char"
         str+="$_char"
     done
-    printf "%s" "$str"
+    log ""
+    log "string before shuffle : %s" "$str"
+    str="$(shuffle "$str")"
+    # cut string if too long (may happen if too many mandatory chars)
+    (( ${#str} > n)) && log  "truncating '%s' to '%s'" "$str" "${str:0:n}"
+    printf "%s" "${str:0:n}"
     return 0
 }
 pw_commands["string"]=pwd_string
@@ -373,7 +459,7 @@ pw_commands["string"]=pwd_string
 # @return: 0
 print_command() {
     local -n arr="$1"
-    local -a label=("function" "length" "sep" "cap" "dict")
+    local -a label=("function" "length" "sep" "cap" "dict" "charset")
     local -i i
     for i in "${!arr[@]}"; do
         log -s "%s=[%s]" "${label[$i]}" "${arr[$i]}"
@@ -396,10 +482,10 @@ gui_passwd() {
             --button=gtk-ok:252 --window-icon=dialog-password
         res=$?
         log "res=%d\n" "$res"
-        if ((res == 0)); then
-            log "%s" "$passwd" | xsel -bi
+        if (( res == 0 )); then
+            printf "%s" "$passwd" | xsel -bi
         fi
-        ((res == 1))
+        ((res != 252))
     do true;  done
     return $res
 }
@@ -409,7 +495,9 @@ parse_opts() {
     local sopts="cCd:ghms:vx:"
     local lopts="copy,capitalize,dictionary:,gui,help,man,separator:,verbose,extended:"
     # set by options
-    local tmp="" tmp_length="" tmp_sep="" tmp_cap="" tmp_dict="" tmp_chars=""
+    local tmp="" tmp_length="" tmp_sep="" tmp_cap="" tmp_dict="" tmp_dir=""
+    local tmp_charset=""
+    local c2="" c3=""
     local  -i  i
 
     if ! tmp=$(getopt -o "$sopts" -l "$lopts" -n "$CMD" -- "$@"); then
@@ -455,13 +543,17 @@ parse_opts() {
                 ;;
             '-x'|'--extended')
                 for (( i = 0; i < ${#2}; ++i)); do
-                    case "${2:$i:1}" in
-                        'a') tmp_chars+="$pw_a" ;;
-                        'A') tmp_chars+="$pw_A" ;;
-                        '1') tmp_chars+="$pw_1" ;;
-                        'x') tmp_chars+="$pw_x" ;;
-                        'y') tmp_chars+="$pw_y" ;;
-                        'k') tmp_chars+="$pw_k" ;;
+                    c2="${2:i:1}"
+                    case "$c2" in
+                        a|A|1|x|y|k|e)
+                            tmp_charset+="$c2"
+                            c3="${2:i+1:1}"
+                            if [[ "$c3" == ":" ]]; then
+                                tmp_charset+=":"
+                                (( i++ ))
+                            fi
+                            ;;
+
                         *) printf "unknown character set '%s\n" "${2:$i:1}"
                            usage
                            exit 1
@@ -511,7 +603,9 @@ parse_opts() {
             string)
                 pw_type="string"
                 tmp_length=10
-                [[ -n $tmp_chars ]] &&  pw_charset="$tmp_chars"
+                if [[ -n $tmp_charset ]]; then
+                    pw_charset="$tmp_charset"
+                fi
                 ;;
             *)
                 printf "%s: Unknown '%s' password type.\n" "$CMDNAME" "$type"
@@ -539,6 +633,9 @@ parse_opts() {
     [[ $pw_sep = "0" ]] && pw_sep=""
     [[ -n $tmp_cap   ]] && pw_cap=$tmp_cap
     [[ -n $tmp_dict  ]] && pw_dict=$tmp_dict
+
+    # look for dictionary file
+    check_dict pw_dict || exit 1
 }
 
 parse_opts "$@"
