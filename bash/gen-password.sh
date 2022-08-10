@@ -210,11 +210,25 @@ check_dict() {
     return 0
 }
 
+# sanitize() - sanitize string for HTML characters
+# $1: string to cleanup
+#
+# @return: 0, $1 will contain the sanitized string
+sanitize() {
+    local str="$1"
+
+    str=${str//&/&amp;}
+    str=${str//</&lt;}
+    str=${str//>/&gt;}
+    str=${str//'"'/&quot;}
+    log "sanitized string: '%s' -> '%s'" "$1" "$str"
+    printf -- "%str" "$str"
+}
 
 # srandom() - use RANDOM to simulate SRANDOM
 # $1: Reference of variable to hold result
 #
-# Note: RANDOM is 15 bits, SRANDOM is 15 bits.
+# Note: RANDOM is 15 bits, SRANDOM is 32 bits.
 #
 # @return: 0, $1 will contain the 32 bits random number
 srandom() {
@@ -305,12 +319,12 @@ rnd_charset() {
     local charset="$1" ret=""
     local -i len=$2 _i
 
-    log "rnd_charset: %d from  '%s'" "$len" "$charset"
+    #log "rnd_charset: %d from  '%s'" "$len" "$charset"
     for ((_i=0; _i<len; ++_i)); do
         ret+=${charset:$(rnd ${#charset}):1}
     done
 
-    log "rnd_charset: return '%s'" "$ret"
+    #log "rnd_charset: return '%s'" "$ret"
     printf "%s" "$ret"
 }
 
@@ -446,6 +460,7 @@ pwd_string() {
     log ""
     log "string before shuffle : %s" "$str"
     str="$(shuffle "$str")"
+    log "string after shuffle : %s" "$str"
     # cut string if too long (may happen if too many mandatory chars)
     (( ${#str} > n)) && log  "truncating '%s' to '%s'" "$str" "${str:0:n}"
     printf "%s" "${str:0:n}"
@@ -473,11 +488,12 @@ print_command() {
 # @return: 0
 gui_passwd() {
     local -a _command=("$@")
-    local passwd="" res=0
+    local passwd="" res=0 sane=""
 
     while
         passwd=$("${_command[@]}")
-        yad --title="Password Generator" --text-align=center --text="$passwd" \
+        sane=$(sanitize "$passwd")
+        yad --title="Password Generator" --text-align=center --text="$sane" \
             --borders=20 --button=gtk-copy:0 --button=gtk-refresh:1 \
             --button=gtk-ok:252 --window-icon=dialog-password
         res=$?
