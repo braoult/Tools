@@ -27,9 +27,9 @@
 #          directory.
 #
 #       -a, --absolute-target
-#          Do not try to resolve TARGET path.. By default, the script will try to
+#          Do not try to resolve TARGET path. By default, the script will try to
 #          guess TARGET absolute path. This is not possible if current system is
-#          different from the the one from which the backup was made, or if some
+#          different from the one from which the backup was made, or if some
 #          path component are missing or were changed.
 #          If this option is used, TARGET must be an absolute path as it was on
 #          backuped machine.
@@ -294,7 +294,11 @@ check_paths() {
         TARGETDIR="$(mktemp -d /tmp/"$tmp"-XXXXXXXX)"
         log "%s target directory created." "$TARGETDIR"
     fi
-    for var in ROOTDIR BACKUPDIR TARGETDIR; do
+    log "ROOTDIR=[%s]" "$ROOTDIR"
+    log "BACKUPDIR=[%s]" "$BACKUPDIR"
+    log "TARGETDIR=[%s]" "$TARGETDIR"
+    log "TARGET=[%s]" "$TARGET"
+    for var in BACKUPDIR TARGETDIR; do
         [[ $var = ROOTDIR && -z $RESOLVETARGET ]] && continue
         if [[ ! -d "${!var}" ]]; then
             printf "%s is not a directory.\n" "$var"
@@ -312,10 +316,6 @@ check_paths() {
             rm "$target"
         done
     fi
-    log "ROOTDIR=[%s]" "$ROOTDIR"
-    log "BACKUPDIR=[%s]" "$BACKUPDIR"
-    log "TARGETDIR=[%s]" "$TARGETDIR"
-    log "TARGET=[%s]" "$TARGET"
     return 0
 }
 
