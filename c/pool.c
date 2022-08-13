@@ -1,6 +1,6 @@
 /* pool.c - A simple pool manager.
  *
- * Copyright (C) 2021 Bruno Raoult ("br")
+ * Copyright (C) 2021-2022 Bruno Raoult ("br")
  * Licensed under the GNU General Public License v3.0 or later.
  * Some rights reserved. See COPYING.
  *
@@ -25,7 +25,6 @@
 void pool_stats(pool_t *pool)
 {
     if (pool) {
-#       ifdef DEBUG_POOL
         block_t *block;
 
         log_f(1, "[%s] pool [%p]: blocks:%u avail:%u alloc:%u grow:%u eltsize:%lu\n",
@@ -36,7 +35,6 @@ void pool_stats(pool_t *pool)
             log(5, "%p ", block);
         }
         log(5, "\n");
-#       endif
     }
 }
 
@@ -67,6 +65,8 @@ pool_t *pool_create(const char *name, u32 growsize, size_t eltsize)
         pool->nblocks = 0;
         INIT_LIST_HEAD(&pool->list_available);
         INIT_LIST_HEAD(&pool->list_blocks);
+    } else {
+        errno = ENOMEM;
     }
     return pool;
 }
@@ -105,9 +105,6 @@ void *pool_get(pool_t *pool)
         return NULL;
     if (!pool->available) {
         block_t *block = malloc(sizeof(block_t) + pool->eltsize * pool->growsize);
-        void *cur;
-        u32 i;
-
         if (!block) {
 #           ifdef DEBUG_POOL
             log_f(1, "[%s]: failed block allocation\n", pool->name);
@@ -131,16 +128,15 @@ void *pool_get(pool_t *pool)
 #       endif
 
         pool->allocated += pool->growsize;
-        for (i = 0; i < pool->growsize; ++i) {
-            cur = block->data + i * pool->eltsize;
+        for (u32 i = 0; i < pool->growsize; ++i) {
+            void *cur = block->data + i * pool->eltsize;
 #           ifdef DEBUG_POOL
             log_f(7, "alloc=%p cur=%p\n", block, cur);
 #           endif
             _pool_add(pool, (struct list_head *)cur);
         }
-        //pool_stats(pool);
     }
-    /* this is the effective address if the object (and also the
+    /* this is the effective address of the object (and also the
      * pool list_head address)
      */
     return _pool_get(pool);
@@ -221,5 +217,6 @@ int main(int ac, char**av)
         }
     }
     pool_stats(pool);
+    pool_destroy(pool);
 }
 #endif

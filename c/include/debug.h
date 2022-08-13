@@ -37,48 +37,61 @@ static inline void _printf debug(_unused u32 level, _unused bool timestamp,
 #undef _unused
 #undef _printf
 
-/* format: only printf
+/**
+ * log - simple log (no function name, no indent, no timestamp)
+ * @level:      log level
+ * @fmt:        printf format string
+ * @args:       subsequent arguments to printf
  */
 #define log(level, fmt, args...) \
     debug((level), false, 0, NULL, 0, fmt, ##args)
 
-/* format : indent, no func name, no timestamp
+/**
+ * log_i - log with indent (no function name, no timestamp)
+ * @level:      log level
+ * @fmt:        printf format string
+ * @args:       subsequent arguments to printf
+ *
+ * Output example:
  * >>>>val=2
  */
 #define log_i(level, fmt, args...) \
     debug((level), false, (level), NULL, 0, fmt, ##args)
 
-/* format : func name, no indent, no timestamp
- * [foo] val=2
+/**
+ * log_f - log with function name (no indent name, no timestamp)
+ * @level:      log level
+ * @fmt:        printf format string
+ * @args:       subsequent arguments to printf
+ *
+ * Output example:
+ * [function] val=2
  */
 #define log_f(level, fmt, args...) \
     debug((level), false, 0, __func__, 0, fmt, ##args)
 
-/* format : func name, no indent, no timestamp
- * >>>> [foo:15] val=2
+/**
+ * log_if - log with function name and line number (no indent name, no timestamp)
+ * @level:      log level
+ * @fmt:        printf format string
+ * @args:       subsequent arguments to printf
+ *
+ * Output example:
+ * >>>> [function:15] val=2
  */
 #define log_if(level, fmt, args...) \
     debug((level), false, (level), __func__, __LINE__, fmt, ##args)
 
-/* format : func name, indent, timestamp
- * >>>>foo:15 val=2
+/**
+ * log_it - log with function name, line number, indent, and timestamp
+ * @level:      log level
+ * @fmt:        printf format string
+ * @args:       subsequent arguments to printf
+ *
+ * Output example:
+ * >>>> [function:15] val=2
  */
 #define log_it(level, fmt, args...) \
     debug((level), true, (level), __func__, __LINE__, fmt, ##args)
 
-/* format: file name, no indent, no timestamp
- * foo:15 val=2
- *
- * #define log_f(level, fmt, args...)                            \
- *   debug((level), false, 0, __FILE__, __LINE__, fmt, args)
- */
-
-#else
-#define log(level, fmt, args...)
-#define log_i(...)
-#define log_f(...)
-#define log_if(...)
-#define log_it(...)
-#define log_f(...)
-
-#endif  /* DEBUG_H */
+#endif /* DEBUG_H */

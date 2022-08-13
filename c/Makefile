@@ -45,7 +45,6 @@ LDFLAGS   := -L$(LIBDIR)
 LDLIB     := -l$(LIB)
 
 export LD_LIBRARY_PATH = $(LIBDIR)
-#export PATH := .:$(PATH)
 
 .PHONY: all libs clean dirs
 
