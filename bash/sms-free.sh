@@ -212,6 +212,7 @@ get_credentials() {
             log "skipping."
         fi
     done
+    printf "%s: cannot find credentials for user '%s'\n" "$cmdname" "$_user"
     return 2
 }
 
