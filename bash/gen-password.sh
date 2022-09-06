@@ -52,7 +52,7 @@
 #          Mac: use capital hexadecimal digits.
 #
 #       -d, --dictionary=FILE
-#          Use FILE as wordlist file. Default is eff_large_wordlist.txt.
+#          Use FILE as wordlist file. Default is en-5.
 #          FILE will be searched in these directories : root, current directory,
 #          and /usr/local/share/br-tools/gen-password directory.
 #
@@ -64,8 +64,16 @@
 #       -h, --help
 #          Display usage and exit.
 #
+#       -l, --list-dictionaries
+#          Display the list of available dictionaries, with names suitable for
+#          the "-d" option.
+#
 #       -m, --man
 #          Print a man-like help and exit.
+#
+#       -n, --no-similar-chars
+#          For "string" type only, this option removes similar characters which
+#          could be difficult to differenciate: 0-O, 1-l, 8-B, [], ø-Ø, ~--, ...
 #
 #       -s, --separator=CHAR
 #          CHAR is used as separator when TYPE allows it. Use "0" to remove
@@ -85,16 +93,14 @@
 #          x: extended characters set 1: #$%&@^`~.,:;{[()]}
 #          y: extended characters set 2: "'\/|_-<>*+!?=
 #          k: japanese hiragana: あいうえおかき...
-#          When a RANGED character is followed by ':' exactly one character of
+#          When a RANGED character is followed by a ':' exactly one character of
 #          this range will appear in generated password: If we want two or more
 #          digits, the syntax would be '-x1:1:1'.
 #
-#
-# EXAMPLES
-#       TODO
-#
 # TODO
 #       Add different languages wordlists.
+#       Replace hiragana with half-width katakana ?
+#       Add usage examples
 #
 # AUTHOR
 #       Bruno Raoult.
@@ -103,7 +109,6 @@
 #       Pages on Diceware/words lists :
 #       EFF: https://www.eff.org/dice
 #       diceware: https://theworld.com/~reinhold/diceware.html
-#
 #
 #%MAN_END%
 
@@ -119,7 +124,7 @@ declare -A pw_charsets=(
     [A]="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     [1]="0123456789"
     [e]="âêîôûáéíóúàèìòùäëïöüãõñçøÂÊÎÔÛÁÉÍÓÚÀÈÌÒÙÄËÏÖÜÃÕÑÇØ¡¿"
-    [x]='#$%&@^`~.,:;{[()]}'\\
+    [x]='#$%&@^`~.,:;{[()]}'
     [y]=\''"\/|_-<>*+!?='
     [k]="あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん"
 )
@@ -133,6 +138,7 @@ declare pw_dict=""
 declare pw_copy=""
 declare pw_gui=""
 declare pw_verbose=""
+declare pw_no_similar=""
 declare pw_charset="a:A:1:aA1"
 
 declare -A pw_commands=()
@@ -183,21 +189,29 @@ log() {
     return 0
 }
 
-# check_dict() - check for foctionary file
+# check_dict() - check for dictionary file
 # $1: the dictionary filename (variable reference).
 #
 # @return: 0 on success, $1 will contain full path to dictionary.
 # @return: 1 if not found
+# @return: 2 if format is wrong
 check_dict() {
     local -n dict="$1"
-    local tmp_dir tmp_dict
+    local tmp_dir tmp_dict tmp_key tmp_dummy
 
     if [[ -n "$dict" ]]; then
         for tmp_dir in / ./ /usr/local/share/br-tools/gen-password/; do
-            tmp_dict="$tmp_dir$dict"
+            tmp_dict="$tmp_dir$dict.txt"
             log -n "checking for %s dictionary... " "$tmp_dict"
             if [[ -f "$tmp_dict" ]]; then
-                log "found."
+                log -n "found, "
+                # shellcheck disable=SC2034
+                read -r tmp_key tmp_dummy < "$tmp_dict"
+                if ! [[ $tmp_key =~ ^[1-6]+$ ]]; then
+                    log "wrong format [%s]" "$tmp_key"
+                    return 2
+                fi
+                log "key length=%d" "${#tmp_key}"
                 dict="$tmp_dict"
                 return 0
             else
@@ -208,6 +222,41 @@ check_dict() {
         exit 1
     fi
     return 0
+}
+
+# list_dict() - list available dictionaries.
+#
+# @return: 0 on success
+# @return: 1 on error
+list_dict() {
+    local datadir="/usr/local/share/br-tools/gen-password" file fn fn2 key dummy
+    local -a output
+    local -i res=1 cur=0 i
+
+    if [[ -d "$datadir" ]]; then
+        printf -v output[0] "#\tlen\tName"
+        for file in "$datadir"/*.txt; do
+            fn=${file##*/}
+            fn=${fn%.txt}
+            # shellcheck disable=SC2034
+            fn2="$fn"
+            if check_dict fn2; then
+                (( cur++ ))
+                # shellcheck disable=SC2034
+                read -r key dummy < "$file"
+                printf -v output[cur-1] "%d\t%d\t%s" "$cur" "${#key}" "$fn"
+            fi
+        done
+        if ((cur > 0)); then
+            printf "#\tlen\tName\n"
+            for (( i = 0; i < cur; ++i )); do
+                printf "%s\n" "${output[i]}"
+            done
+            return 0
+        fi
+    fi
+    printf "No dictionaries found.\n"
+    return 1
 }
 
 # sanitize() - sanitize string for HTML characters
@@ -508,8 +557,8 @@ gui_passwd() {
 
 parse_opts() {
     # short and long options
-    local sopts="cCd:ghms:vx:"
-    local lopts="copy,capitalize,dictionary:,gui,help,man,separator:,verbose,extended:"
+    local sopts="cCd:ghlmns:vx:"
+    local lopts="copy,capitalize,dictionary:,gui,help,list-dictionaries,man,no-similar-chars,separator:,verbose,extended:"
     # set by options
     local tmp="" tmp_length="" tmp_sep="" tmp_cap="" tmp_dict="" tmp_dir=""
     local tmp_charset=""
@@ -546,9 +595,16 @@ parse_opts() {
                 usage
                 exit 0
                 ;;
+            '-l'|'--list-dictionaries')
+                list_dict
+                exit 0
+                ;;
             '-m'|'--man')
                 man
                 exit 0
+                ;;
+            '-n'|'no-similar-chars')
+                pw_no_similar=y
                 ;;
             '-s'|'--separator')
                 tmp_sep="$2"
@@ -590,7 +646,7 @@ parse_opts() {
         shift
     done
 
-    # parse arguments
+    # parse remaining arguments
     if (($# > 0)); then                               # type
         type=$1
         case "$type" in
@@ -612,13 +668,21 @@ parse_opts() {
             passphrase)
                 pw_type="passphrase"
                 tmp_length=6
-                [[ -z $tmp_dict ]] && tmp_dict="eff_large_wordlist.txt"
+                [[ -z $tmp_dict ]] && tmp_dict="en-5"
                 [[ -z $tmp_sep ]] && tmp_sep=" "
                 [[ -z $tmp_cap ]] && tmp_cap=""
                 ;;
             string)
                 pw_type="string"
                 tmp_length=10
+                if [[ -n $pw_no_similar ]]; then
+                    pw_charsets[A]="ABCDEFGHIJKLMNPQRSTUVWXYZ"
+                    pw_charsets[a]="abcdefghijkmnopqrstuvwxyz"
+                    pw_charsets[1]="23456789"
+                    pw_charsets[e]="âêîôûáéíóúàèìòùñçÂÊÎÔÛÁÉÍÓÚÀÈÌÒÙÇ¡¿"
+                    pw_charsets[x]='#$%&@^`.,:;{()}'
+                    pw_charsets[y]='\/|_<>*+!?='
+                fi
                 if [[ -n $tmp_charset ]]; then
                     pw_charset="$tmp_charset"
                 fi
@@ -659,7 +723,6 @@ parse_opts "$@"
 pw_command=("${pw_commands[$pw_type]}" "$pw_length" "$pw_sep" "$pw_cap" "$pw_dict"
            "$pw_charset")
 
-#printf "command=%d %s\n" "${#pw_command[@]}" "+${pw_command[*]}+"
 print_command pw_command
 
 if [[ -z $pw_gui ]]; then
@@ -671,32 +734,5 @@ if [[ -z $pw_gui ]]; then
 else
     gui_passwd "${pw_command[@]}"
 fi
-
-exit 0
-
-gui_passwd() {
-    local passwd="" res=0
-
-    while
-        passwd=$(rnd_mac "$@")
-        yad --title="Password Generator" --text-align=center --text="$passwd" \
-            --borders=20 --button=gtk-copy:0 --button=gtk-refresh:1 --button=gtk-ok:252 \
-            --window-icon=dialog-password
-        res=$?
-        printf "res=%d\n" "$res" >& 2
-        if ((res == 0)); then
-            printf "%s" "$passwd" | xsel -bi
-        fi
-        ((res == 1))
-    do true;  done
-    return $res
-}
-
-for i in {0..10}; do
-    rnd_charset "abcde"
-done
-echo
-exit 0
-gui_passwd "$@"
 
 exit 0
