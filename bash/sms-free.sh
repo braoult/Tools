@@ -176,6 +176,7 @@ log() {
 echorun() {
     local -n _out="$1"
     shift
+    [[ -n $sms_dryrun ]] && log -n "dry-run: "
     log "%s" "$*"
     [[ -z $sms_dryrun ]] && _out=$("$@")
     return $?
@@ -192,26 +193,17 @@ echorun() {
 get_credentials() {
     local -n _cred=$1
     local _keyfile="$2" _user="$3" _name=""
-    local -a _keys
-    local -i _n
 
     log "get_credentials: ref=%s user=%s keyfile=%s" "$!_cred" "$_user" "$_keyfile"
     if [[ ! -r "$_keyfile" ]]; then
         printf "%s: cannot read keyfile %s\n" "$cmdname" "$_keyfile"
         return 2
     fi
-    readarray -t _keys < "$_keyfile"
-    log "keyfile contains %d lines" "${#_keys[@]}"
-    for ((_n = 0; _n < ${#_keys[@]}; ++_n)); do
-        IFS=: read -r _name _cred <<< "${_keys[$_n]}"
-        log -n "key %d: name:[%s] creds:[%s]..." "$_n" "$_name" "$_cred"
-        if [[ $_name = "$_user" ]]; then
-            log "match"
-            return 0
-        else
-            log "skipping."
-        fi
-    done
+    while IFS=: read -r _name _cred; do
+        log -n "key: name=[%s] creds=[%s]... " "$_name" "$_cred"
+        [[ $_name = "$_user" ]] && log "match." && return 0
+        log "skipping."
+    done  < "$_keyfile"
     printf "%s: cannot find credentials for user '%s'\n" "$cmdname" "$_user"
     return 2
 }
@@ -297,14 +289,13 @@ parse_opts() {
             ;;
     esac
 
-    log "keyfile=%s" "$sms_keyfile"
     log "credentials=%s" "$sms_credentials"
     log "message=[%s]" "$sms_message"
 }
 
 # send-sms() - send SMS (GET method)
 send_sms() {
-    local _login=${sms_credentials%:*} _pass=${sms_credentials#*:} _res=""
+    local _login=${sms_credentials%:*} _pass=${sms_credentials#*:} _res="" _str=""
 
     log "send_sms(): login=%s pass=%s" "$_login" "$_pass"
     echorun _res curl --silent --get --write-out '%{http_code}' \
@@ -313,17 +304,16 @@ send_sms() {
             --data-urlencode "msg=$sms_message" \
             "$sms_url"
     [[ -n $sms_dryrun ]] && _res=200
-    log "send_sms(): curl status=%s (%s)" "$_res" \
-        "${sms_status[$_res]:-${sms_status[-]}}"
+    _str="${sms_status[$_res]:-${sms_status[-]}}"
+    log "send_sms(): curl status=%s (%s)" "$_res" "$_str"
     if [[ $_res != 200 ]]; then
-        printf "%s: %s\n" "$cmdname" "${sms_status[$_res]:-${sms_status[-]}}"
+        printf "%s: %s\n" "$cmdname" "$_str"
     fi
 }
 
 parse_opts "$@"
 send_sms
 exit 0
-
 
 # Indent style for emacs
 # Local Variables:
