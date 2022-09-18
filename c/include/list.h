@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
 /* adaptation of kernel's <linux/list.h>
- * Main change is that I don't use READ_ONCE and WRITE_ONCE
- * See https://www.kernel.org/doc/Documentation/memory-barriers.txt
+ *
  */
 
 #ifndef __BR_LIST_H
@@ -11,6 +10,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include "rwonce.h"
+#include "container-of.h"
 
 /************ originally in <include/linux/types.h> */
 struct list_head {
@@ -32,11 +32,6 @@ struct hlist_node {
  */
 #define LIST_POISON1  ((void *) 0x100 + POISON_POINTER_DELTA)
 #define LIST_POISON2  ((void *) 0x200 + POISON_POINTER_DELTA)
-
-/************ originally in <include/linux/kernel.h> */
-#define container_of(ptr, type, member) ({				\
-	void *__mptr = (void *)(ptr);					\
-	((type *)(__mptr - offsetof(type, member))); })
 
 /*
  * Circular doubly linked list implementation.

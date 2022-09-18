@@ -55,7 +55,7 @@ typedef signed char schar;
 /* count trailing zeroes : 00101000 -> 3
  *                              ^^^
  */
-static inline int ctz64(u64 n)
+static __always_inline int ctz64(u64 n)
 {
 #   if __has_builtin(__builtin_ctzl)
 #   ifdef DEBUG_BITS
@@ -77,7 +77,7 @@ static inline int ctz64(u64 n)
 #   endif
 }
 
-static inline int ctz32(u32 n)
+static __always_inline int ctz32(u32 n)
 {
 #   if __has_builtin(__builtin_ctz)
 #   ifdef DEBUG_BITS
@@ -99,10 +99,10 @@ static inline int ctz32(u32 n)
 #   endif
 }
 
-/* count leading zeroes : 00101000 -> 2
- *                        ^^
+/* clz - count leading zeroes : 00101000 -> 2
+ *                              ^^
  */
-static inline int clz64(u64 n)
+static __always_inline int clz64(u64 n)
 {
 #   if __has_builtin(__builtin_clzl)
 #   ifdef DEBUG_BITS
@@ -126,7 +126,7 @@ static inline int clz64(u64 n)
 #   endif
 }
 
-static inline int clz32(u32 n)
+static __always_inline int clz32(u32 n)
 {
 #   if __has_builtin(__builtin_clz)
 #   ifdef DEBUG_BITS
@@ -149,10 +149,27 @@ static inline int clz32(u32 n)
 #   endif
 }
 
+/* fls - find last set : 00101000 -> 6
+ *                           ^
+ */
+static __always_inline int fls64(u64 n)
+{
+    if (!n)
+        return 0;
+    return 64 - clz64(n);
+}
+
+static __always_inline int fls32(u32 n)
+{
+    if (!n)
+        return 0;
+    return 32 - clz32(n);
+}
+
 /* find first set :  00101000 -> 4
  *                       ^
  */
-static inline uint ffs64(u64 n)
+static __always_inline uint ffs64(u64 n)
 {
 #   if __has_builtin(__builtin_ffsl)
 #   ifdef DEBUG_BITS
@@ -176,7 +193,7 @@ static inline uint ffs64(u64 n)
 #   endif
 }
 
-static inline uint ffs32(u32 n)
+static __always_inline uint ffs32(u32 n)
 {
 #   if __has_builtin(__builtin_ffs)
 #   ifdef DEBUG_BITS
@@ -203,7 +220,7 @@ static inline uint ffs32(u32 n)
 /* count set bits:  10101000 -> 3
  *                  ^ ^ ^
  */
-static inline int popcount64(u64 n)
+static __always_inline int popcount64(u64 n)
 {
 #   if __has_builtin(__builtin_popcountl)
 #   ifdef DEBUG_BITS
@@ -224,7 +241,7 @@ static inline int popcount64(u64 n)
 #   endif
 }
 
-static inline int popcount32(u32 n)
+static __always_inline int popcount32(u32 n)
 {
 #   if __has_builtin(__builtin_popcount)
 #   ifdef DEBUG_BITS
@@ -244,6 +261,8 @@ static inline int popcount32(u32 n)
     return count;
 #   endif
 }
+
+
 
 /** bit_for_each - iterate over an u64/u32 bits
  * @pos:        an int used as current bit

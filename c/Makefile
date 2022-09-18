@@ -13,7 +13,7 @@
 SHELL  := /bin/bash
 CC     := gcc
 
-CFLAGS += -std=gnu99
+CFLAGS += -std=gnu11
 CFLAGS += -O2
 CFLAGS += -g
 CFLAGS += -Wall
@@ -46,7 +46,7 @@ LDLIB     := -l$(LIB)
 
 export LD_LIBRARY_PATH = $(LIBDIR)
 
-.PHONY: all libs clean dirs
+.PHONY: all libs clean dirs bear
 
 all: libs
 
@@ -84,3 +84,7 @@ $(OBJDIR)/%.o: %.c
 .c.s:
 	@echo generating $@
 	@$(CC) -S -fverbose-asm $(CFLAGS) -I $(INCDIR) $< -o $@
+
+bear: clean
+	@echo building ccls language server compilation database
+	@bear -- make
