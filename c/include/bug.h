@@ -8,7 +8,8 @@
 #include "likely.h"
 #include "debug.h"
 
-/* inspired by Linux kernel's <asm/bug.h> */
+/* BUG functions inspired by Linux kernel's <asm/bug.h>
+ */
 
 #define panic() exit(0xff)
 

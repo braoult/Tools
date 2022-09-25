@@ -262,6 +262,90 @@ static __always_inline int popcount32(u32 n)
 #   endif
 }
 
+/*  rolXX are taken from kernel's <linux/bitops.h> are are:
+ * SPDX-License-Identifier: GPL-2.0
+ */
+
+/**
+ * rol64 - rotate a 64-bit value left
+ * @word: value to rotate
+ * @shift: bits to roll
+ */
+static inline u64 rol64(u64 word, unsigned int shift)
+{
+	return (word << (shift & 63)) | (word >> ((-shift) & 63));
+}
+
+/**
+ * ror64 - rotate a 64-bit value right
+ * @word: value to rotate
+ * @shift: bits to roll
+ */
+static inline u64 ror64(u64 word, unsigned int shift)
+{
+	return (word >> (shift & 63)) | (word << ((-shift) & 63));
+}
+
+/**
+ * rol32 - rotate a 32-bit value left
+ * @word: value to rotate
+ * @shift: bits to roll
+ */
+static inline u32 rol32(u32 word, unsigned int shift)
+{
+	return (word << (shift & 31)) | (word >> ((-shift) & 31));
+}
+
+/**
+ * ror32 - rotate a 32-bit value right
+ * @word: value to rotate
+ * @shift: bits to roll
+ */
+static inline u32 ror32(u32 word, unsigned int shift)
+{
+	return (word >> (shift & 31)) | (word << ((-shift) & 31));
+}
+
+/**
+ * rol16 - rotate a 16-bit value left
+ * @word: value to rotate
+ * @shift: bits to roll
+ */
+static inline u16 rol16(u16 word, unsigned int shift)
+{
+	return (word << (shift & 15)) | (word >> ((-shift) & 15));
+}
+
+/**
+ * ror16 - rotate a 16-bit value right
+ * @word: value to rotate
+ * @shift: bits to roll
+ */
+static inline u16 ror16(u16 word, unsigned int shift)
+{
+	return (word >> (shift & 15)) | (word << ((-shift) & 15));
+}
+
+/**
+ * rol8 - rotate an 8-bit value left
+ * @word: value to rotate
+ * @shift: bits to roll
+ */
+static inline u8 rol8(u8 word, unsigned int shift)
+{
+	return (word << (shift & 7)) | (word >> ((-shift) & 7));
+}
+
+/**
+ * ror8 - rotate an 8-bit value right
+ * @word: value to rotate
+ * @shift: bits to roll
+ */
+static inline u8 ror8(u8 word, unsigned int shift)
+{
+	return (word >> (shift & 7)) | (word << ((-shift) & 7));
+}
+
 
 
 /** bit_for_each - iterate over an u64/u32 bits
