@@ -5,7 +5,7 @@
 #include "hash.h"
 
 /* Return the hash of a string of known length */
-unsigned int full_name_hash(const void *salt, const char *name, unsigned int len)
+unsigned int hash_string(const void *salt, const char *name, unsigned int len)
 {
 	unsigned long hash = init_name_hash(salt);
 	while (len--)
