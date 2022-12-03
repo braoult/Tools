@@ -8,7 +8,6 @@
 /* Fast hashing routine for ints,  longs and pointers.
    (C) 2002 Nadia Yvette Chambers, IBM */
 
-#include <asm/types.h>
 #include <asm/bitsperlong.h>
 #include "bits.h"
 #include "br.h"
@@ -157,7 +156,7 @@ static inline unsigned int end_name_hash(unsigned long hash)
  *
  * If not set, this falls back to a wrapper around the preceding.
  */
-extern unsigned int __pure full_name_hash(const void *salt, const char *, unsigned int);
+extern unsigned int __pure hash_string(const void *salt, const char *, unsigned int);
 
 /*
  * A hash_len is a u64 with the hash of a string in the low
