@@ -153,11 +153,11 @@ void pool_destroy(pool_t *pool)
     log(5, "blocks:");
 #   endif
     list_for_each_entry_safe(block, tmp, &pool->list_blocks, list_blocks) {
-        list_del(&block->list_blocks);
-        free(block);
 #       ifdef DEBUG_POOL
         log(5, " %p", block);
 #       endif
+        list_del(&block->list_blocks);
+        free(block);
     }
 #   ifdef DEBUG_POOL
     log(5, "\n");
