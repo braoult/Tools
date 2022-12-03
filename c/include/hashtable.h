@@ -12,8 +12,6 @@
 #define _LINUX_HASHTABLE_H
 
 #include "list.h"
-#include <linux/types.h>
-#include <linux/kernel.h>
 #include "hash.h"
 //#include <linux/rculist.h>
 
