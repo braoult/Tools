@@ -1,4 +1,4 @@
-/* bits.h - bits functions.
+/* br.h - misc macros.
  *
  * Copyright (C) 2021-2022 Bruno Raoult ("br")
  * Licensed under the GNU General Public License v3.0 or later.
@@ -18,12 +18,18 @@
 #ifndef _BR_H
 #define _BR_H
 
+/* Indirect stringification.  Doing two levels allows the parameter to be a
+ * macro itself.  For example, compile with -DFOO=bar, __stringify(FOO)
+ * converts to "bar".
+ */
+#define __stringify_1(x...)	#x
+#define __stringify(x...)	__stringify_1(x)
+
 /* generate a (maybe) unique id.
  */
 #define ___PASTE(x, y)      x##y
 #define __PASTE(x, y)       ___PASTE(x, y)
 #define __UNIQUE_ID(prefix) __PASTE(__PASTE(__UNIQUE_ID_, prefix), __COUNTER__)
-//__##prefix##__COUNTER__
 
 /* see https://lkml.org/lkml/2018/3/20/845 for explanation of this monster
  */
