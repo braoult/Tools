@@ -31,7 +31,7 @@ void pool_stats(pool_t *pool)
               pool->name, (void *)pool, pool->nblocks, pool->available,
               pool->allocated, pool->growsize, pool->eltsize);
         log(5, "\tblocks: ");
-        list_for_each_entry(block, &poo7l->list_blocks, list_blocks) {
+        list_for_each_entry(block, &pool->list_blocks, list_blocks) {
             log(5, "%p ", block);
         }
         log(5, "\n");
