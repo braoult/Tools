@@ -27,11 +27,11 @@ void pool_stats(pool_t *pool)
     if (pool) {
         block_t *block;
 
-        log_f(1, "[%s] pool [%p]: blocks:%u avail:%u alloc:%u grow:%u eltsize:%lu\n",
-              pool->name, (void *)pool, pool->nblocks, pool->available, pool->allocated,
-              pool->growsize, pool->eltsize);
+        log_f(1, "[%s] pool [%p]: blocks:%u avail:%u alloc:%u grow:%u eltsize:%zu\n",
+              pool->name, (void *)pool, pool->nblocks, pool->available,
+              pool->allocated, pool->growsize, pool->eltsize);
         log(5, "\tblocks: ");
-        list_for_each_entry(block, &pool->list_blocks, list_blocks) {
+        list_for_each_entry(block, &poo7l->list_blocks, list_blocks) {
             log(5, "%p ", block);
         }
         log(5, "\n");
@@ -43,14 +43,13 @@ pool_t *pool_create(const char *name, u32 growsize, size_t eltsize)
     pool_t *pool;
 
 #   ifdef DEBUG_POOL
-    log_f(1, "name=[%s] growsize=%u eltsize=%lu\n",
-          name, growsize, eltsize);
+    log_f(1, "name=[%s] growsize=%u eltsize=%zu\n", name, growsize, eltsize);
 #   endif
     /* we need at least  sizeof(struct list_head) space in pool elements
      */
     if (eltsize < sizeof (struct list_head)) {
 #       ifdef DEBUG_POOL
-        log_f(1, "[%s]: structure size too small (%lu < %lu), adjusting to %lu.\n",
+        log_f(1, "[%s]: structure size too small (%zu < %zu), adjusting to %zu.\n",
               name, eltsize, sizeof(struct list_head), sizeof(struct list_head));
 #       endif
         eltsize = sizeof(struct list_head);
@@ -74,11 +73,9 @@ pool_t *pool_create(const char *name, u32 growsize, size_t eltsize)
 static u32 _pool_add(pool_t *pool, struct list_head *elt)
 {
 #   ifdef DEBUG_POOL
-    log_f(6, "pool=%p &head=%p elt=%p off1=%lu off2=%lu\n",
-          (void *)pool,
-          (void *)&pool->list_available,
-          (void *)elt,
-          (void *)&pool->list_available-(void *)pool,
+    log_f(6, "pool=%p &head=%p elt=%p off1=%zu off2=%zu\n",
+          (void *)pool, (void *)&pool->list_available, (void *)elt,
+          (void *)&pool->list_available - (void *)pool,
           offsetof(pool_t, list_available));
 #   endif
 
