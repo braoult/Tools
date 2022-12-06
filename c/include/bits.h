@@ -10,8 +10,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later <https://spdx.org/licenses/GPL-3.0-or-later.html>
  *
  */
-#ifndef BITS_H
-#define BITS_H
+#ifndef _BITS_H
+#define _BITS_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -49,6 +49,30 @@ typedef unsigned int uint;
 typedef unsigned short ushort;
 typedef unsigned char uchar;
 
+/* count set bits:  10101000 -> 3
+ *                  ^ ^ ^
+ */
+static __always_inline int popcount64(u64 n)
+{
+#   if __has_builtin(__builtin_popcountl)
+#   ifdef DEBUG_BITS
+    log_f(1, "builtin.\n");
+#   endif
+    return __builtin_popcountl(n);
+
+#   else
+#   ifdef DEBUG_BITS
+    log_f(1, "emulated.\n");
+#   endif
+    int count = 0;
+    while (n) {
+        count++;
+        n &= (n - 1);
+    }
+    return count;
+#   endif
+}
+
 /* char is a special case, as it can be signed or unsigned
  */
 typedef signed char schar;
@@ -74,7 +98,7 @@ static __always_inline int ctz64(u64 n)
 #   ifdef DEBUG_BITS
     log_f(1, "emulated.\n");
 #   endif
-    return popcount64((n & −n) − 1);
+    return popcount64((n & -n) - 1);
 #   endif
 }
 
@@ -96,7 +120,7 @@ static __always_inline int ctz32(u32 n)
 #   ifdef DEBUG_BITS
     log_f(1, "emulated.\n");
 #   endif
-    return popcount32((n & −n) − 1);
+    return popcount32((n & -n) - 1);
 #   endif
 }
 
@@ -215,30 +239,6 @@ static __always_inline uint ffs32(u32 n)
     log_f(1, "emulated.\n");
 #   endif
     return popcount32(n ^ ~-n);
-#   endif
-}
-
-/* count set bits:  10101000 -> 3
- *                  ^ ^ ^
- */
-static __always_inline int popcount64(u64 n)
-{
-#   if __has_builtin(__builtin_popcountl)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin.\n");
-#   endif
-    return __builtin_popcountl(n);
-
-#   else
-#   ifdef DEBUG_BITS
-    log_f(1, "emulated.\n");
-#   endif
-    int count = 0;
-    while (n) {
-        count++;
-        n &= (n - 1);
-    }
-    return count;
 #   endif
 }
 
@@ -518,4 +518,4 @@ int __bits_per(unsigned long n)
 #define bit_for_each32_2(pos, tmp, ul)                                  \
     for (tmp = ul, pos = ctz32(tmp); tmp; tmp ^= 1U << pos, pos = ctz32(tmp))
 
-#endif  /* BITS_H */
+#endif  /* _BITS_H */
