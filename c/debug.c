@@ -19,12 +19,13 @@
 #define DEBUG_DEBUG
 #endif
 
+#include "bits.h"
 #include "debug.h"
 
 #define NANOSEC  1000000000                       /* nano sec in sec */
 #define MILLISEC 1000000                          /* milli sec in sec */
 
-static s64 timer_start;                           /* in nanosecond */
+static long long timer_start;                     /* in nanosecond */
 static u32 debug_level=0;
 
 void debug_level_set(u32 level)
@@ -48,14 +49,13 @@ void debug_init(u32 level)
     log(0, "timer started.\n");
 }
 
-inline static s64 timer_elapsed()
+inline static long long timer_elapsed()
 {
     struct timespec timer;
 
     clock_gettime(CLOCK_MONOTONIC, &timer);
     return (timer.tv_sec * NANOSEC + timer.tv_nsec) - timer_start;
 }
-
 
 /* void debug - log function
  * @timestamp : boolean
@@ -75,9 +75,9 @@ void debug(u32 level, bool timestamp, u32 indent, const char *src,
         printf("%*s", 2*(indent-1), "");
 
     if (timestamp) {
-        s64 diff = timer_elapsed();
-        printf("%ld.%03ld ", diff/NANOSEC, (diff/1000000)%1000);
-        printf("%010ld ", diff);
+        long long diff = timer_elapsed();
+        printf("%lld.%03lld ", diff/NANOSEC, (diff/1000000)%1000);
+        printf("%010lld ", diff);
     }
 
     if (src) {

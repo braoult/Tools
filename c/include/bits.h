@@ -25,10 +25,10 @@
 #endif
 
 /* no plan to support 32bits for now...
+ * #if __WORDSIZE != 64
+ * #error "Only 64 bits word size supported."
+ * #endif
  */
-#if __WORDSIZE != 64
-#error "Only 64 bits word size supported."
-#endif
 
 /* fixed-size types
  */
@@ -59,6 +59,27 @@ static __always_inline int popcount64(u64 n)
     log_f(1, "builtin.\n");
 #   endif
     return __builtin_popcountl(n);
+
+#   else
+#   ifdef DEBUG_BITS
+    log_f(1, "emulated.\n");
+#   endif
+    int count = 0;
+    while (n) {
+        count++;
+        n &= (n - 1);
+    }
+    return count;
+#   endif
+}
+
+static __always_inline int popcount32(u32 n)
+{
+#   if __has_builtin(__builtin_popcount)
+#   ifdef DEBUG_BITS
+    log_f(1, "builtin.\n");
+#   endif
+    return __builtin_popcount(n);
 
 #   else
 #   ifdef DEBUG_BITS
@@ -239,27 +260,6 @@ static __always_inline uint ffs32(u32 n)
     log_f(1, "emulated.\n");
 #   endif
     return popcount32(n ^ ~-n);
-#   endif
-}
-
-static __always_inline int popcount32(u32 n)
-{
-#   if __has_builtin(__builtin_popcount)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin.\n");
-#   endif
-    return __builtin_popcount(n);
-
-#   else
-#   ifdef DEBUG_BITS
-    log_f(1, "emulated.\n");
-#   endif
-    int count = 0;
-    while (n) {
-        count++;
-        n &= (n - 1);
-    }
-    return count;
 #   endif
 }
 
