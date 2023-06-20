@@ -44,10 +44,29 @@ typedef uint8_t  u8;
 
 /* convenience types
  */
+typedef long long int llong;
+typedef unsigned long long int ullong;
 typedef unsigned long int ulong;
 typedef unsigned int uint;
 typedef unsigned short ushort;
 typedef unsigned char uchar;
+
+/* define common types sizes
+ */
+#define BITS_PER_CHAR 8
+
+#ifndef BITS_PER_SHORT
+#define BITS_PER_SHORT (BITS_PER_CHAR * sizeof (short))
+#endif
+#ifndef BITS_PER_INT
+#define BITS_PER_INT   (BITS_PER_CHAR * sizeof (int))
+#endif
+#ifndef BITS_PER_LONG
+#define BITS_PER_LONG  (BITS_PER_CHAR * sizeof (long))
+#endif
+#ifndef BITS_PER_LLONG
+#define BITS_PER_LLONG (BITS_PER_CHAR * sizeof (long long))
+#endif
 
 /* count set bits:  10101000 -> 3
  *                  ^ ^ ^

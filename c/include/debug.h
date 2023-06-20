@@ -25,6 +25,7 @@
 #ifdef DEBUG_DEBUG
 void debug_init(u32 level);
 void debug_level_set(u32 level);
+u32  debug_level_get(void);
 void _printf debug(u32 level, bool timestamp,
                    u32 indent, const char *src,
                    u32 line, const char *, ...);
