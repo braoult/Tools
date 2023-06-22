@@ -50,6 +50,9 @@ typedef unsigned long int ulong;
 typedef unsigned int uint;
 typedef unsigned short ushort;
 typedef unsigned char uchar;
+/* char is a special case, as it can be signed or unsigned
+ */
+typedef signed char schar;
 
 /* define common types sizes
  */
@@ -112,10 +115,6 @@ static __always_inline int popcount32(u32 n)
     return count;
 #   endif
 }
-
-/* char is a special case, as it can be signed or unsigned
- */
-typedef signed char schar;
 
 /* count trailing zeroes : 00101000 -> 3
  *                              ^^^
