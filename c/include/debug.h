@@ -17,7 +17,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "bits.h"
+#include <bits.h>
 
 #define _unused __attribute__((__unused__))
 #define _printf __attribute__ ((format (printf, 6, 7)))
@@ -28,13 +28,13 @@ void debug_level_set(u32 level);
 u32  debug_level_get(void);
 void _printf debug(u32 level, bool timestamp,
                    u32 indent, const char *src,
-                   u32 line, const char *, ...);
+                   u32 line, const char *fmt, ...);
 #else  /* DEBUG_DEBUG */
 static inline void debug_init(_unused u32 level) {}
 static inline void debug_level_set(_unused u32 level) {}
 static inline void _printf debug(_unused u32 level, _unused bool timestamp,
                                  _unused u32 indent, _unused const char *src,
-                                 _unused u32 line, const char *, ...) {}
+                                 _unused u32 line, _unused const char *fmt, ...) {}
 #endif  /* DEBUG_DEBUG */
 #undef _unused
 #undef _printf
