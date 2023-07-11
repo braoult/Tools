@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+#
+# ~/.bashrc.br.lorien - host specific initialization
+#
+# (C) Bruno Raoult ("br"), 2001-2023
+# Licensed under the GNU General Public License v3.0 or later.
+# Some rights reserved. See COPYING.
+#
+# You should have received a copy of the GNU General Public License along with this
+# program. If not, see <https://www.gnu.org/licenses/gpl-3.0-standalone.html>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later <https://spdx.org/licenses/GPL-3.0-or-later.html>
+#
+# Usage: to be invoked from .bashrc.$USER
+# i.e., add at the end of .bashrc.$USER:
+# [ -f "$HOME/.bashrc.$USER.$(hostname)" ] && . "$HOME/.bashrc.$USER.$(hostname)"
+
+# look for a pdf viewer
+hash atril 2> /dev/null && alias acroread=atril
+
+# mysql aliases. Will match any "[client-XXX]" lines in ~/.my.cnf
+# and generate "myXXX" aliases.
+if [[ -r ~/.my.cnf ]]; then
+    mapfile -t MYSQL_ARRAY < ~/.my.cnf
+
+    for line in "${MYSQL_ARRAY[@]}"; do
+        if [[ $line =~ ^\[client-(.+)\]$ ]]; then
+            SUFFIX="${BASH_REMATCH[1]}"
+            # shellcheck disable=SC2139,SC2140
+            alias my"$SUFFIX"="mysql --defaults-group-suffix=-$SUFFIX"
+        fi
+    done
+fi
+
+# shortcuts to commonly used directories
+# alias dev="cd ~/dev/www/cf.bodi"                     # Clash of Clans
+alias eud="cd ~/dev/eudyptula; . ./bin/ENV.sh"         # Eudyptula
+alias aoc="cd ~/dev/advent-of-code/2022/; . ../env.sh" # Advent of Code
+alias wchess="cd ~/dev/www/com.raoult/devs/chess"      # raoult.com chess
+alias chess="cd ~/dev/brchess; . env.sh"               # brchess
+alias tools="cd ~/dev/tools"                           # tools
+
+# Indent style for emacs
+# Local Variables:
+# mode: shell-script
+# sh-basic-offset: 4
+# sh-indentation: 4
+# indent-tabs-mode: nil
+# End:

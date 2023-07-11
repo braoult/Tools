@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+#
+# ~/.bashrc.br - user specific initialization
+#
+# (C) Bruno Raoult ("br"), 2001-2023
+# Licensed under the GNU General Public License v3.0 or later.
+# Some rights reserved. See COPYING.
+#
+# You should have received a copy of the GNU General Public License along with this
+# program. If not, see <https://www.gnu.org/licenses/gpl-3.0-standalone.html>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later <https://spdx.org/licenses/GPL-3.0-or-later.html>
+#
+# Usage: to be invoked from .bashrc.
+# i.e., add at the end of .bashrc:
+# [ -f "$HOME/.bashrc.$USER" ] && . "$HOME/.bashrc.$USER"
+
+# _remove $1 from PATH
+_path_del() {
+    local _l=":$PATH:"
+    while [[ $_l =~ :$1: ]]; do
+          _l=${_l//:$1:/:}
+    done
+    _l=${_l%:}
+    _l=${_l#:}
+    PATH="$_l"
+}
+
+# _prepend : prepend $1 to PATH.
+_path_prepend() {
+    _path_del "$1"
+    PATH="$1:$PATH"
+}
+
+# _append : append $1 to PATH.
+_path_append() {
+    _path_del "$1"
+    PATH="$PATH:$1"
+}
+
+# adjust PATH. Below paths will be added at beginning.
+_lpath=("$HOME/bin/$(uname -s)-$(uname -m)"
+        "$HOME/bin"
+        "$HOME/.cargo/bin"
+        "/usr/local/bin")
+
+# loop array in reverse order. Note: We do not test for path existence and add it
+# unconditionally, to avoid automounter interference.
+for (( _i = ${#_lpath[@]} - 1; _i >= 0; --_i )); do
+    _path_prepend "${_lpath[_i]}"
+done
+unset _lpath
+_path_append /usr/games
+
+# enable core file
+ulimit -Sc 102400                                 # in 1024 bytes, 100Mb
+
+# ... and set PAGER to less (for man(1) and others)
+if hash less 2>/dev/null; then
+    export PAGER=less
+    # do not clear screen after "less", exit immediately if one page only
+    export LESS="-XFB"
+    # ... and just alias more... to less ;-)
+    alias more=less
+fi
+
+# no output split for dc and bc / make bc silent
+export DC_LINE_LENGTH=0
+export BC_LINE_LENGTH=0
+export BC_ENV_ARGS=--quiet
+
+# both ubuntu and debian assume we want colors if TERM contains "color"
+# this is surely not true, as TERM is often forced by terminal emulator
+# shellcheck disable=SC2154
+PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
+case "$TERM" in
+    xterm*|rxvt*)
+        PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
+        ;;
+    *)
+        ;;
+esac
+
+# trim prompt path
+export PROMPT_DIRTRIM=3
+
+# find a suitable editor
+e() {
+    $VISUAL "$@"
+}
+export -f e
+if hash emacs 2>/dev/null; then
+    # uncomment below to use full emacs
+    #export EDITOR=emacs
+    # ... OR: uncomment below to use emacsclient
+    #export ALTERNATE_EDITOR="/usr/bin/emacs"
+    #export EDITOR="emacs.sh"
+    #alias emacs="emacs.sh"
+    export ALTERNATE_EDITOR=""
+    export VISUAL="emacsclient -c"
+    alias emacs="emacsclient -c"
+    #alias crontab="VISUAL=emacsclient crontab -e"
+    #alias crontab="emacs-crontab.sh"
+else
+    # emacs clones, then vim/vi, then... whatever left.
+    _VISUALS=(zile jed mg vim vi nano ed)
+
+    for e in "${_VISUALS[@]}"; do
+        if hash "$e" 2>/dev/null; then
+            export VISUAL="$e"
+            break
+        fi
+    done
+    unset _VISUALS
+fi
+export EDITOR=$VISUAL
+
+# append to the history file, don't overwrite it
+shopt -s histappend
+# write history after each command
+export PROMPT_COMMAND="history -a"
+
+# Add timestamp in history
+export HISTTIMEFORMAT="%d/%m %H:%M "
+# ignore history dups, delete all previous dups
+export HISTCONTROL=ignoredups:erasedups
+# history size
+HISTSIZE=5000
+HISTFILESIZE=5000
+
+# remove new stupid Debian "ls" quoting, and colors...
+# Many complains, one of them:
+#    https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=813164#226
+export QUOTING_STYLE=literal
+[[ -v BASH_ALIASES[ls] ]] && unalias ls
+
+# avoid these stupid systemd defaults (horizontal scroll and pager)
+alias systemctl="systemctl --no-pager --full"
+
+# aliases for ls and history
+alias l='ls -F'
+alias ls='ls -F'
+alias l1='ls -1F'
+alias la='ls -aF'
+alias ll='ls -lF'
+alias lla='ls -laF'
+alias ldl='ls -l | grep ^d'
+[[ -v BASH_ALIASES[lrt] ]] && unalias lrt
+lrt() {
+    local -i _l=20
+    if (( $# > 0 )) && [[ $1 =~ [[:digit:]]+ ]]; then
+        _l="$1"
+        shift
+    fi
+    # shellcheck disable=2012
+    ls -lrt "${1:-.}" | tail -"$_l"
+}
+[[ -v BASH_ALIASES[lart] ]] && unalias lart
+lart() {
+    local -i _l=20
+    if (( $# > 0 )) && [[ $1 =~ [[:digit:]]+ ]]; then
+        _l="$1"
+        shift
+    fi
+    # shellcheck disable=2012
+    ls -laFrt "${1:-.}" | tail -"$_l"
+}
+
+alias h="history   10"                            # short
+alias hl="history  25"                            # long
+alias hll="history 100"                           # very long
+alias hlll="history"                              # all history
+
+# user temp directory
+export USERTMP=~/tmp
+
+# :)
+alias fuck='sudo $(history -p \!\!)'
+
+# french-> english and english->french translation
+alias trans="trans.sh"
+alias rtrans="trans.sh -fen -tfr"
+
+# host specific initialization
+# shellcheck disable=SC1090
+[ -f "$HOME/.bashrc.$USER.$(hostname)" ] && . "$HOME/.bashrc.$USER.$(hostname)"
+
+# Indent style for emacs
+# Local Variables:
+# mode: shell-script
+# sh-basic-offset: 4
+# sh-indentation: 4
+# indent-tabs-mode: nil
+# End:
