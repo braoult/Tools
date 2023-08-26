@@ -1,7 +1,7 @@
 ﻿;;;; ~/.Emacs.d/init.el
 ;;;;
 ;;;; emacs configuration
-;;;; br, 2010-2020
+;;;; br, 2010-2023
 ;;;;
 ;;;; all personal variables/defun are prefixed with "my/".
 ;;
@@ -907,7 +907,7 @@ in whole buffer.  With neither, delete comments on current line."
    helm-quick-update t
    helm-M-x-requires-pattern nil
    helm-ff-skip-boring-files t
-   helm-ff-guess-fap-urls nil                    ; do not use ffap for URL at point
+   helm-ff-guess-fap-urls nil                     ; do not use ffap for URL at point
 
    helm-projectile-fuzzy-match nil
 
@@ -1794,7 +1794,6 @@ The output will appear in the buffer *PHP*."
 (use-package multiple-cursors
   :ensure t
   :bind (("C-S-C C-S-C" . mc/edit-lines)
-
          ("H-SPC" . set-rectangular-region-anchor)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; sql mode
