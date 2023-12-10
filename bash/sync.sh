@@ -498,6 +498,9 @@ parse_opts() {
         [[ -f "$_backup_dir/.syncrc" ]] && _config=${_config:-"$_backup_dir/.syncrc"}
     fi
 
+    # We do not know what to do...
+    [[ -z "$_config" ]] && usage
+
     # see https://unix.stackexchange.com/questions/406216
     CONFIG=$(realpath -sm "$_config")
     if [[ -z "$CONFIG" ]]; then
@@ -507,7 +510,7 @@ parse_opts() {
         printf "%s: Cannot open %s file\n" "$CMDNAME" "$CONFIG"
         exit 9
     fi
-    # shellcheck source=sync-conf-example.sh
+    # shellcheck source=share/sync/sync-conf-example.sh
     source "$CONFIG"
 
     # _backup_dir takes precedence on SOURCEDIR (useless ?)
