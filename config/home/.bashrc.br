@@ -178,7 +178,15 @@ export USERTMP=~/tmp
 alias fuck='sudo $(history -p \!\!)'
 
 # I am used to rehash...
-alias rehash="hash -r"
+# rehash - manage bash's remembered commands paths
+# $1...: Only forget those commands
+rehash() {
+    if (($#)); then
+        hash -d "$@"
+    else
+        hash -r
+    fi
+}
 
 # french-> english and english->french translation
 alias trans="trans.sh"
