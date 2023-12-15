@@ -16,26 +16,34 @@
 # [ -f "$HOME/.bashrc.$USER" ] && . "$HOME/.bashrc.$USER"
 
 # _remove $1 from PATH
-_path_del() {
-    local _l=":$PATH:"
-    while [[ $_l =~ :$1: ]]; do
-          _l=${_l//:$1:/:}
+_var_del() {
+    local -n _p_del=$1
+    local _l=":$_p_del:"
+
+    while [[ $_l =~ :$2: ]]; do
+          _l=${_l//:$2:/:}
     done
     _l=${_l%:}
     _l=${_l#:}
-    PATH="$_l"
+    _p_del="$_l"
 }
 
 # _prepend : prepend $1 to PATH.
-_path_prepend() {
-    _path_del "$1"
-    PATH="$1:$PATH"
+_var_prepend() {
+    local -n _p_prepend=$1
+
+    _var_del _p_prepend "$2"
+    [[ -z $_p_prepend ]] && _p_prepend="$2" && return
+    _p_prepend="$2:$_p_prepend"
 }
 
 # _append : append $1 to PATH.
-_path_append() {
-    _path_del "$1"
-    PATH="$PATH:$1"
+_var_append() {
+    local -n _p_append=$1
+
+    _var_del _p_append "$2"
+    [[ -z $_p_append ]] && _p_append="$2" && return
+    _p_append="$_p_append:$2"
 }
 
 # adjust PATH. Below paths will be added at beginning.
@@ -47,10 +55,12 @@ _lpath=("$HOME/bin/$(uname -s)-$(uname -m)"
 # loop array in reverse order. Note: We do not test for path existence and add it
 # unconditionally, to avoid automounter interference.
 for (( _i = ${#_lpath[@]} - 1; _i >= 0; --_i )); do
-    _path_prepend "${_lpath[_i]}"
+    _var_prepend PATH "${_lpath[_i]}"
 done
 unset _lpath
-_path_append /usr/games
+
+# why is it in default Ubuntu path ?
+_var_del PATH /snap/bin
 
 # enable core file
 ulimit -Sc 102400                                 # in 1024 bytes, 100Mb
