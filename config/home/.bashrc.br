@@ -15,7 +15,13 @@
 # i.e., add at the end of .bashrc:
 # [ -f "$HOME/.bashrc.$USER" ] && . "$HOME/.bashrc.$USER"
 
-# _remove $1 from PATH
+# _var_del() - remove a directory from a column-separated list.
+# $1: variable name (reference)
+# $2: directory to remove
+#
+# $1 is the name of a PATH-like (with colon separator) variable.
+# example:
+#      _var_del PATH /usr/games
 _var_del() {
     local -n _p_del=$1
     local _l=":$_p_del:"
@@ -28,7 +34,9 @@ _var_del() {
     _p_del="$_l"
 }
 
-# _prepend : prepend $1 to PATH.
+# _var_prepend() - prepend directory to colon separated variable.
+# $1: variable name (reference)
+# $2: directory to add
 _var_prepend() {
     local -n _p_prepend=$1
 
@@ -37,7 +45,9 @@ _var_prepend() {
     _p_prepend="$2:$_p_prepend"
 }
 
-# _append : append $1 to PATH.
+# _var_append() - append directory to colon separated variable.
+# $1: variable name (reference)
+# $2: directory to add
 _var_append() {
     local -n _p_append=$1
 
@@ -49,7 +59,7 @@ _var_append() {
 # adjust PATH. Below paths will be added at beginning.
 _lpath=("$HOME/bin/$(uname -s)-$(uname -m)"
         "$HOME/bin"
-        "$HOME/.cargo/bin"
+        #"$HOME/.cargo/bin"
         "/usr/local/bin")
 
 # loop array in reverse order. Note: We do not test for path existence and add it
@@ -113,7 +123,7 @@ if hash emacs 2>/dev/null; then
     #alias crontab="emacs-crontab.sh"
 else
     # emacs clones, then vim/vi, then... whatever left.
-    _VISUALS=(zile jed mg vim vi nano ed)
+    _VISUALS=(zile jed mg e3em vim vi nano ed)
 
     for e in "${_VISUALS[@]}"; do
         if hash "$e" 2>/dev/null; then
@@ -129,11 +139,12 @@ export EDITOR=$VISUAL
 shopt -s histappend
 # write history after each command
 export PROMPT_COMMAND="history -a"
-
 # Add timestamp in history
 export HISTTIMEFORMAT="%d/%m %H:%M "
 # ignore history dups, delete all previous dups
-export HISTCONTROL=ignoredups:erasedups
+export HISTCONTROL="ignorespace:ignoredups:erasedups"
+# ignore these in history
+export HISTIGNORE="history *:h:hl:hll:hlll"
 # history size
 HISTSIZE=5000
 HISTFILESIZE=5000
