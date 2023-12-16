@@ -15,13 +15,16 @@
 # i.e., add at the end of .bashrc:
 # [ -f "$HOME/.bashrc.$USER" ] && . "$HOME/.bashrc.$USER"
 
-# _var_del() - remove a directory from a column-separated list.
-# $1: variable name (reference)
-# $2: directory to remove
+# _var_del() - remove an element from a colon-separated list.
+# $1: name (reference) of a colon separated list
+# $2: element to remove (string)
 #
-# $1 is the name of a PATH-like (with colon separator) variable.
-# example:
-#      _var_del PATH /usr/games
+# _var_del() removes every occurrence of $2, if there are more than 1,
+# and leaves $1 unchanged if $2 is not present.
+#
+# Example:
+# With VAR's value being "foo:bar:quax:bar". Using "_var_del VAR bar" will
+# leave VAR with the value "foo:quax".
 _var_del() {
     local -n _p_del=$1
     local _l=":$_p_del:"
@@ -34,9 +37,15 @@ _var_del() {
     _p_del="$_l"
 }
 
-# _var_prepend() - prepend directory to colon separated variable.
+# _var_prepend() - prepend element to colon-separated variable.
 # $1: variable name (reference)
-# $2: directory to add
+# $2: element to add (string)
+#
+# Any occurrence of $2 in $1 is first removed, then $2 is added at $1 beginning.
+#
+# Example:
+# With VAR's value being "foo:bar:quax:bar". Using "_var_prepend VAR bar"
+# will leave VAR with the value "bar:foo:quax".
 _var_prepend() {
     local -n _p_prepend=$1
 
@@ -45,9 +54,15 @@ _var_prepend() {
     _p_prepend="$2:$_p_prepend"
 }
 
-# _var_append() - append directory to colon separated variable.
+# _var_append() - append element to colon-separated variable.
 # $1: variable name (reference)
-# $2: directory to add
+# $2: element to add (string)
+#
+# Any occurrence of $2 in $1 is first removed, then $2 is added at $1 end.
+#
+# Example:
+# With VAR's value being "foo:bar:quax:bar". Using "_var_append VAR bar"
+# will leave VAR with the value "foo:quax:bar".
 _var_append() {
     local -n _p_append=$1
 
