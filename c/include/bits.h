@@ -15,10 +15,9 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <bits/wordsize.h>                        /* defines __WORDSIZE: 32 or 64 */
 
-/* next include will define __WORDSIZE: 32 or 64
- */
-#include <bits/wordsize.h>
+void bits_implementation(void);
 
 #ifndef __has_builtin
 #define __has_builtin(x) 0
@@ -77,15 +76,9 @@ typedef signed char schar;
 static __always_inline int popcount64(u64 n)
 {
 #   if __has_builtin(__builtin_popcountl)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin.\n");
-#   endif
     return __builtin_popcountl(n);
 
 #   else
-#   ifdef DEBUG_BITS
-    log_f(1, "emulated.\n");
-#   endif
     int count = 0;
     while (n) {
         count++;
@@ -98,15 +91,9 @@ static __always_inline int popcount64(u64 n)
 static __always_inline int popcount32(u32 n)
 {
 #   if __has_builtin(__builtin_popcount)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin.\n");
-#   endif
     return __builtin_popcount(n);
 
 #   else
-#   ifdef DEBUG_BITS
-    log_f(1, "emulated.\n");
-#   endif
     int count = 0;
     while (n) {
         count++;
@@ -122,21 +109,12 @@ static __always_inline int popcount32(u32 n)
 static __always_inline int ctz64(u64 n)
 {
 #   if __has_builtin(__builtin_ctzl)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin ctzl.\n");
-#   endif
     return __builtin_ctzl(n);
 
 #   elif __has_builtin(__builtin_clzl)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin clzl.\n");
-#   endif
     return __WORDSIZE - (__builtin_clzl(n & -n) + 1);
 
 #   else
-#   ifdef DEBUG_BITS
-    log_f(1, "emulated.\n");
-#   endif
     return popcount64((n & -n) - 1);
 #   endif
 }
@@ -144,21 +122,12 @@ static __always_inline int ctz64(u64 n)
 static __always_inline int ctz32(u32 n)
 {
 #   if __has_builtin(__builtin_ctz)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin ctz.\n");
-#   endif
     return __builtin_ctzl(n);
 
 #   elif __has_builtin(__builtin_clz)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin clz.\n");
-#   endif
     return __WORDSIZE - (__builtin_clz(n & -n) + 1);
 
 #   else
-#   ifdef DEBUG_BITS
-    log_f(1, "emulated.\n");
-#   endif
     return popcount32((n & -n) - 1);
 #   endif
 }
@@ -169,15 +138,9 @@ static __always_inline int ctz32(u32 n)
 static __always_inline int clz64(u64 n)
 {
 #   if __has_builtin(__builtin_clzl)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin.\n");
-#   endif
     return __builtin_clzl(n);
 
 #   else
-#   ifdef DEBUG_BITS
-    log_f(1, "emulated.\n");
-#   endif
     u64 r, q;
 
     r = (n > 0xFFFFFFFF) << 5; n >>= r;
@@ -193,15 +156,9 @@ static __always_inline int clz64(u64 n)
 static __always_inline int clz32(u32 n)
 {
 #   if __has_builtin(__builtin_clz)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin.\n");
-#   endif
     return __builtin_clz(n);
 
 #   else
-#   ifdef DEBUG_BITS
-    log_f(1, "emulated.\n");
-#   endif
     u32 r, q;
 
     r = (n > 0xFFFF)     << 4; n >>= r;
@@ -214,7 +171,7 @@ static __always_inline int clz32(u32 n)
 }
 
 /* fls - find last set : 00101000 -> 6
- *                           ^
+ *                         ^
  */
 static __always_inline int fls64(u64 n)
 {
@@ -236,23 +193,14 @@ static __always_inline int fls32(u32 n)
 static __always_inline uint ffs64(u64 n)
 {
 #   if __has_builtin(__builtin_ffsl)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin ffsl.\n");
-#   endif
     return __builtin_ffsl(n);
 
 #   elif __has_builtin(__builtin_ctzl)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin ctzl.\n");
-#   endif
     if (n == 0)
         return (0);
     return __builtin_ctzl(n) + 1;
 
 #   else
-#   ifdef DEBUG_BITS
-    log_f(1, "emulated.\n");
-#   endif
     return popcount64(n ^ ~-n);
 #   endif
 }
@@ -260,28 +208,19 @@ static __always_inline uint ffs64(u64 n)
 static __always_inline uint ffs32(u32 n)
 {
 #   if __has_builtin(__builtin_ffs)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin ffs.\n");
-#   endif
     return __builtin_ffs(n);
 
 #   elif __has_builtin(__builtin_ctz)
-#   ifdef DEBUG_BITS
-    log_f(1, "builtin ctz.\n");
-#   endif
     if (n == 0)
         return (0);
     return __builtin_ctz(n) + 1;
 
 #   else
-#   ifdef DEBUG_BITS
-    log_f(1, "emulated.\n");
-#   endif
     return popcount32(n ^ ~-n);
 #   endif
 }
 
-/*  rolXX are taken from kernel's <linux/bitops.h> are are:
+/* rolXX/rorXX are taken from kernel's <linux/bitops.h> are are:
  * SPDX-License-Identifier: GPL-2.0
  */
 
@@ -292,7 +231,7 @@ static __always_inline uint ffs32(u32 n)
  */
 static inline u64 rol64(u64 word, unsigned int shift)
 {
-	return (word << (shift & 63)) | (word >> ((-shift) & 63));
+        return (word << (shift & 63)) | (word >> ((-shift) & 63));
 }
 
 /**
@@ -302,7 +241,7 @@ static inline u64 rol64(u64 word, unsigned int shift)
  */
 static inline u64 ror64(u64 word, unsigned int shift)
 {
-	return (word >> (shift & 63)) | (word << ((-shift) & 63));
+        return (word >> (shift & 63)) | (word << ((-shift) & 63));
 }
 
 /**
@@ -312,7 +251,7 @@ static inline u64 ror64(u64 word, unsigned int shift)
  */
 static inline u32 rol32(u32 word, unsigned int shift)
 {
-	return (word << (shift & 31)) | (word >> ((-shift) & 31));
+        return (word << (shift & 31)) | (word >> ((-shift) & 31));
 }
 
 /**
@@ -322,7 +261,7 @@ static inline u32 rol32(u32 word, unsigned int shift)
  */
 static inline u32 ror32(u32 word, unsigned int shift)
 {
-	return (word >> (shift & 31)) | (word << ((-shift) & 31));
+        return (word >> (shift & 31)) | (word << ((-shift) & 31));
 }
 
 /**
@@ -332,7 +271,7 @@ static inline u32 ror32(u32 word, unsigned int shift)
  */
 static inline u16 rol16(u16 word, unsigned int shift)
 {
-	return (word << (shift & 15)) | (word >> ((-shift) & 15));
+        return (word << (shift & 15)) | (word >> ((-shift) & 15));
 }
 
 /**
@@ -342,7 +281,7 @@ static inline u16 rol16(u16 word, unsigned int shift)
  */
 static inline u16 ror16(u16 word, unsigned int shift)
 {
-	return (word >> (shift & 15)) | (word << ((-shift) & 15));
+        return (word >> (shift & 15)) | (word << ((-shift) & 15));
 }
 
 /**
@@ -352,7 +291,7 @@ static inline u16 ror16(u16 word, unsigned int shift)
  */
 static inline u8 rol8(u8 word, unsigned int shift)
 {
-	return (word << (shift & 7)) | (word >> ((-shift) & 7));
+        return (word << (shift & 7)) | (word >> ((-shift) & 7));
 }
 
 /**
@@ -362,22 +301,25 @@ static inline u8 rol8(u8 word, unsigned int shift)
  */
 static inline u8 ror8(u8 word, unsigned int shift)
 {
-	return (word >> (shift & 7)) | (word << ((-shift) & 7));
+        return (word >> (shift & 7)) | (word << ((-shift) & 7));
 }
 
 /**
- * ilog2 -
+ * __ilog2 - non-constant log of base 2 calculators
+ * - the arch may override these in asm/bitops.h if they can be implemented
+ *   more efficiently than using fls() and fls64()
+ * - the arch is not required to handle n==0 if implementing the fallback
  */
-static __always_inline __attribute__((const))
-int __ilog2_u32(u32 n)
-{
-	return fls32(n) - 1;
-}
-
 static __always_inline __attribute__((const))
 int __ilog2_u64(u64 n)
 {
-	return fls64(n) - 1;
+        return fls64(n) - 1;
+}
+
+static __always_inline __attribute__((const))
+int __ilog2_u32(u32 n)
+{
+        return fls32(n) - 1;
 }
 
 /**
@@ -391,7 +333,26 @@ int __ilog2_u64(u64 n)
 static inline __attribute__((const))
 bool is_power_of_2(unsigned long n)
 {
-	return (n != 0 && ((n & (n - 1)) == 0));
+        return (n != 0 && ((n & (n - 1)) == 0));
+}
+
+/**
+ * __roundup_pow_of_two() - round up to nearest power of two
+ * @n: value to round up
+ */
+static inline __attribute__((const))
+u64 __roundup_pow_of_two(u64 n)
+{
+        return 1UL << fls64(n - 1);
+}
+
+/**
+ * __rounddown_pow_of_two() - round down to nearest power of two
+ * @n: value to round down
+ */
+static inline __attribute__((const)) u64 __rounddown_pow_of_two(u64 n)
+{
+        return 1UL << (fls64(n) - 1);
 }
 
 /**
@@ -404,14 +365,14 @@ bool is_power_of_2(unsigned long n)
  *
  * selects the appropriately-sized optimised version depending on sizeof(n)
  */
-#define ilog2(n) \
-( \
-	__builtin_constant_p(n) ?	\
-	((n) < 2 ? 0 :			\
-	 63 - __builtin_clzll(n)) :	\
-	(sizeof(n) <= 4) ?		\
-	__ilog2_u32(n) :		\
-	__ilog2_u64(n)			\
+#define ilog2(n)                        \
+(                                       \
+        __builtin_constant_p(n) ?       \
+        ((n) < 2 ? 0 :                  \
+         63 - __builtin_clzll(n)) :     \
+        (sizeof(n) <= 4) ?              \
+        __ilog2_u32(n) :                \
+        __ilog2_u64(n)                  \
  )
 
 /**
@@ -422,13 +383,13 @@ bool is_power_of_2(unsigned long n)
  * - the result is undefined when n == 0
  * - this can be used to initialise global variables from constant data
  */
-#define roundup_pow_of_two(n)			\
-(						\
-	__builtin_constant_p(n) ? (		\
-		((n) == 1) ? 1 :		\
-		(1UL << (ilog2((n) - 1) + 1))	\
-				   ) :		\
-	__roundup_pow_of_two(n)			\
+#define roundup_pow_of_two(n)                   \
+(                                               \
+        __builtin_constant_p(n) ? (             \
+                ((n) == 1) ? 1 :                \
+                (1UL << (ilog2((n) - 1) + 1))   \
+                                   ) :          \
+        __roundup_pow_of_two(n)                 \
  )
 
 /**
@@ -439,17 +400,16 @@ bool is_power_of_2(unsigned long n)
  * - the result is undefined when n == 0
  * - this can be used to initialise global variables from constant data
  */
-#define rounddown_pow_of_two(n)			\
-(						\
-	__builtin_constant_p(n) ? (		\
-		(1UL << ilog2(n))) :		\
-	__rounddown_pow_of_two(n)		\
+#define rounddown_pow_of_two(n)                 \
+(                                               \
+        __builtin_constant_p(n) ? (             \
+                (1UL << ilog2(n))) :            \
+        __rounddown_pow_of_two(n)               \
  )
 
-static inline __attribute_const__
-int __order_base_2(unsigned long n)
+static inline __attribute_const__ int __order_base_2(unsigned long n)
 {
-	return n > 1 ? ilog2(n - 1) + 1 : 0;
+        return n > 1 ? ilog2(n - 1) + 1 : 0;
 }
 
 /**
@@ -465,22 +425,22 @@ int __order_base_2(unsigned long n)
  *  ob2(5) = 3
  *  ... and so on.
  */
-#define order_base_2(n)				\
-(						\
-	__builtin_constant_p(n) ? (		\
-		((n) == 0 || (n) == 1) ? 0 :	\
-		ilog2((n) - 1) + 1) :		\
-	__order_base_2(n)			\
+#define order_base_2(n)                         \
+(                                               \
+        __builtin_constant_p(n) ? (             \
+            ((n) == 0 || (n) == 1) ?            \
+            0 :                                 \
+            ilog2((n) - 1) + 1) :               \
+        __order_base_2(n)                       \
 )
 
-static inline __attribute__((const))
-int __bits_per(unsigned long n)
+static inline __attribute__((const)) int __bits_per(unsigned long n)
 {
-	if (n < 2)
-		return 1;
-	if (is_power_of_2(n))
-		return order_base_2(n) + 1;
-	return order_base_2(n);
+        if (n < 2)
+            return 1;
+        if (is_power_of_2(n))
+            return order_base_2(n) + 1;
+        return order_base_2(n);
 }
 
 /**
@@ -498,13 +458,13 @@ int __bits_per(unsigned long n)
  * bf(4) = 3
  * ... and so on.
  */
-#define bits_per(n)				\
-(						\
-	__builtin_constant_p(n) ? (		\
-		((n) == 0 || (n) == 1)		\
-			? 1 : ilog2(n) + 1	\
-	) :					\
-	__bits_per(n)				\
+#define bits_per(n)                             \
+(                                               \
+        __builtin_constant_p(n) ? (             \
+            ((n) == 0 || (n) == 1) ?            \
+            1 :                                 \
+            ilog2(n) + 1 :                      \
+            __bits_per(n)                       \
 )
 
 /** bit_for_each - iterate over an u64/u32 bits
