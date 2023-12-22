@@ -39,6 +39,7 @@ alias aoc="cd ~/dev/advent-of-code/2022/; . ../env.sh" # Advent of Code
 alias wchess="cd ~/dev/www/com.raoult/devs/chess"      # raoult.com chess
 alias chess="cd ~/dev/brchess; . env.sh"               # brchess
 alias tools="cd ~/dev/tools"                           # tools
+alias brlib="cd ~/dev/tools/c/brlib"                   # brlib dir/repo
 
 # Indent style for emacs
 # Local Variables:

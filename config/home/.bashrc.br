@@ -177,9 +177,9 @@ alias systemctl="systemctl --no-pager --full"
 alias l='ls -F'
 alias ls='ls -F'
 alias l1='ls -1F'
-alias la='ls -aF'
+alias la='ls -AF'
 alias ll='ls -lF'
-alias lla='ls -laF'
+alias lla='ls -lAF'
 alias ldl='ls -l | grep ^d'
 [[ -v BASH_ALIASES[lrt] ]] && unalias lrt
 lrt() {
@@ -210,8 +210,25 @@ alias hlll="history"                              # all history
 # user temp directory
 export USERTMP=~/tmp
 
-# :)
+# misc aliases
 alias fuck='sudo $(history -p \!\!)'
+alias diff='diff -u'
+# fdiff() - compare two files with same name
+# parameters:
+# $1: first file
+# $2: second file directory
+#
+# fdiff will compare (diff) $1 with a file of basename $1 in $2 directory.
+# Examples:
+# % fdiff .bashrc ~                # compare .bashrc with ~/.bashrc
+# % fdiff /tmp/.bashrc /home/br/   # compare /tmp/.bashrc with /home/br/.bashrc
+
+fdiff () {
+    local file1="$1"                              # file to compare
+    local file2="$2/${file1##*/}"                 # file2 with path
+
+    diff "$file1" "$file2"
+}
 
 # I am used to rehash...
 # rehash - manage bash's remembered commands paths
