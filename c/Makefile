@@ -1,6 +1,6 @@
 # Tools Makefile
 #
-# Copyright (C) 2022 Bruno Raoult ("br")
+# Copyright (C) 2023 Bruno Raoult ("br")
 # Licensed under the GNU General Public License v3.0 or later.
 # Some rights reserved. See COPYING.
 #
@@ -10,81 +10,50 @@
 # SPDX-License-Identifier: GPL-3.0-or-later <https://spdx.org/licenses/GPL-3.0-or-later.html>
 #
 
-SHELL  := /bin/bash
-CC     := gcc
+SHELL     := /bin/bash
+CC        := gcc
+BEAR      := bear
 
-CFLAGS += -std=gnu11
-CFLAGS += -O2
-CFLAGS += -g
-CFLAGS += -Wall
-CFLAGS += -Wextra
-CFLAGS += -march=native
-CFLAGS += -Wmissing-declarations
-CFLAGS += -Wno-unused-result
-
+CFLAGS    += -std=gnu11
+CFLAGS    += -O2
+CFLAGS    += -g
+CFLAGS    += -Wall
+CFLAGS    += -Wextra
+CFLAGS    += -march=native
+CFLAGS    += -Wmissing-declarations
+CFLAGS    += -Wno-unused-result
 # for gprof
-#CFLAGS += -pg
-
+#CFLAGS    += -pg
 # Next one may be useful for valgrind (some invalid instructions)
-# CFLAGS += -mno-tbm
+#CFLAGS    += -mno-tbm
 
-CFLAGS += -DDEBUG_DEBUG		# activate general debug (debug.c)
-CFLAGS += -DDEBUG_POOL		# memory pools management
+CPPFLAGS += -DDEBUG_DEBUG		# activate general debug (debug.c)
+CPPFLAGS += -DDEBUG_POOL		# memory pools management
 
 INCDIR    := ./include
 LIBDIR    := ./lib
 OBJDIR    := ./obj
+BRLIBDIR  := ./brlib
 
 LIBNAME   := br_$(shell uname -m)
-LIB       := lib$(LIBNAME)
-SLIB      := $(LIBDIR)/$(LIB).a
-DLIB      := $(LIBDIR)/$(LIB).so
-LIBSRC    := $(wildcard *.c)
-LIBOBJ    := $(addprefix $(OBJDIR)/,$(patsubst %.c,%.o,$(LIBSRC)))
-LDFLAGS   := -L$(LIBDIR)
-LDLIB     := -l$(LIB)
+#LIB       := lib$(LIBNAME)
 
-export LD_LIBRARY_PATH = $(LIBDIR)
 
-.PHONY: all libs clean dirs bear
+all: brlib
 
-all: libs
+#export LD_LIBRARY_PATH = $(LIBDIR)
 
-libs: dirs $(DLIB) $(SLIB)
+.PHONY: all brlib clean
 
-dirs: $(LIBDIR) $(OBJDIR)
+all: brlib
 
-$(LIBDIR) $(OBJDIR):
-	@echo creating $@ directory.
-	@mkdir $@
+brlib:
+	$(MAKE) -C $(BRLIBDIR)
+
+bear ccls:
+	@echo building ccls language server compilation database
+	$(MAKE) -C $(BRLIBDIR) ccls
 
 clean:
-	@echo deleting $(OBJDIR) and $(LIBDIR) directories.
-	@$(RM) -rf $(LIBDIR) $(OBJDIR)
-
-$(SLIB): $(LIBOBJ)
-	@echo building $@ static library.
-	@$(AR) $(ARFLAGS) -o $@ $^
-
-$(DLIB): CFLAGS += -fPIC
-$(DLIB): LDFLAGS += -shared
-$(DLIB): $(LIBOBJ)
-	@echo building $@ shared library.
-	@$(CC) $(LDFLAGS) $^ -o $@
-
-.c:
-	@echo compiling $<
-	@$(CC) $(CFLAGS) $(LDFLAGS) -I $(INCDIR) $< $(LDLIB) -o $@
-
-#.c.o:
-$(OBJDIR)/%.o: %.c
-	@echo compiling $<.
-	@$(CC) -c $(CFLAGS) $(LDFLAGS) -I $(INCDIR) -o $@ $<
-
-.c.s:
-	@echo generating $@
-	@$(CC) -S -fverbose-asm $(CFLAGS) -I $(INCDIR) $< -o $@
-
-bear: clean
-	@echo building ccls language server compilation database
-	@bear -- make
+	@echo cleaning brlib.
+	@$(MAKE) -C $(BRLIBDIR) clean

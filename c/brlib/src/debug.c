@@ -1,6 +1,6 @@
 /* debug.c - debug/log management
  *
- * Copyright (C) 2021-2022 Bruno Raoult ("br")
+ * Copyright (C) 2021-2023 Bruno Raoult ("br")
  * Licensed under the GNU General Public License v3.0 or later.
  * Some rights reserved. See COPYING.
  *
@@ -19,27 +19,57 @@
 #define DEBUG_DEBUG
 #endif
 
-#include "bits.h"
 #include "debug.h"
 
-#define NANOSEC  1000000000                       /* nano sec in sec */
-#define MILLISEC 1000000                          /* milli sec in sec */
-
 static long long timer_start;                     /* in nanosecond */
-static u32 debug_level=0;
+static int level = 0;                             /* output log when < level */
+static int flush = false;                         /* force flush after logs */
+static FILE *stream = NULL;                       /* stream to use */
 
-void debug_level_set(u32 level)
+/**
+ * debug_level_set() - set debug level.
+ * @_level: debug level (integer).
+ */
+void debug_level_set(int _level)
 {
-    debug_level = level;
-
-    log(1, "debug level set to %u\n", level);
+    level = _level;
+#   ifdef DEBUG_DEBUG_C
+    log(0, "debug level set to %u\n", level);
+#   endif
 }
 
-void debug_init(u32 level)
+/**
+ * debug_level_get() - get debug level.
+ * @return: current level debug (integer).
+ */
+int debug_level_get(void)
+{
+    return level;
+}
+
+void debug_stream_set(FILE *_stream)
+{
+    stream = _stream;
+#   ifdef DEBUG_DEBUG_C
+    log(0, "stream set to %d\n", stream? fileno(stream): -1);
+#   endif
+}
+
+void debug_flush_set(bool _flush)
+{
+    flush = _flush;
+#   ifdef DEBUG_DEBUG_C
+    log(0, "debug flush %s.\n", flush? "set": "unset");
+#   endif
+}
+
+void debug_init(int _level, FILE *_stream, bool _flush)
 {
     struct timespec timer;
 
-    debug_level_set(level);
+    debug_stream_set(_stream);
+    debug_level_set(_level);
+    debug_flush_set(_flush);
     if (!clock_gettime(CLOCK_MONOTONIC, &timer)) {
         timer_start = timer.tv_sec * NANOSEC + timer.tv_nsec;
     }
@@ -49,7 +79,7 @@ void debug_init(u32 level)
     log(0, "timer started.\n");
 }
 
-inline static long long timer_elapsed()
+long long debug_timer_elapsed(void)
 {
     struct timespec timer;
 
@@ -57,38 +87,42 @@ inline static long long timer_elapsed()
     return (timer.tv_sec * NANOSEC + timer.tv_nsec) - timer_start;
 }
 
-/* void debug - log function
- * @timestamp : boolean
- * @indent    : indent level (2 spaces each)
- * @src       : source file/func name (or NULL)
- * @line      : line number
+/**
+ * debug() - log function
+ * @lev: log level
+ * @timestamp: boolean, print timestamp if true
+ * @indent: indent level (2 spaces each)
+ * @src: source file/func name (or NULL)
+ * @line: line number
  */
-void debug(u32 level, bool timestamp, u32 indent, const char *src,
-           u32 line, const char *fmt, ...)
+void debug(int lev, bool timestamp, int indent, const char *src,
+           int line, const char *fmt, ...)
 {
-    if (level > debug_level)
+    if (!stream || lev > level)
         return;
 
     va_list ap;
 
     if (indent)
-        printf("%*s", 2*(indent-1), "");
+        fprintf(stream, "%*s", 2*(indent-1), "");
 
     if (timestamp) {
-        long long diff = timer_elapsed();
-        printf("%lld.%03lld ", diff/NANOSEC, (diff/1000000)%1000);
-        printf("%010lld ", diff);
+        long long diff = debug_timer_elapsed();
+        fprintf(stream, "%lld.%03lld ", diff/NANOSEC, (diff/1000000)%1000);
+        fprintf(stream, "%010lld ", diff);
     }
 
     if (src) {
         if (line)
-            printf("[%s:%u] ", src, line);
+            fprintf(stream, "[%s:%u] ", src, line);
         else
-            printf("[%s] ", src);
+            fprintf(stream, "[%s] ", src);
     }
     va_start(ap, fmt);
-    vprintf(fmt, ap);
+    vfprintf(stream, fmt, ap);
     va_end(ap);
+    if (flush)
+        fflush(stream);
 }
 
 #ifdef BIN_debug
