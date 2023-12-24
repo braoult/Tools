@@ -19,6 +19,7 @@ LD        := ld
 BEAR      := bear
 TOUCH     := touch
 RM        := rm
+MKDIR     := mkdir -p
 RMDIR     := rmdir
 
 SRCDIR    := ./src
@@ -27,6 +28,7 @@ OBJDIR    := ./obj
 LIBDIR    := ./lib
 BINDIR    := ./bin
 DEPDIR    := ./dep
+TESTDIR   := ./test
 
 SRC       := $(wildcard $(SRCDIR)/*.c)                      # brlib sources
 SRC_FN    := $(notdir $(SRC))                               # source basename
@@ -39,17 +41,23 @@ DLIB      := $(addsuffix .so, $(LIBDIR)/lib$(LIB))          # dynamic lib
 DEP_FN    := $(SRC_FN) $(LIBSRC_FN)
 DEP       := $(addprefix $(DEPDIR)/,$(DEP_FN:.c=.d))
 
-##################################### emacs projectile/ccls
+TESTSRC   := $(wildcard $(TESTDIR)/*.c)
+TEST_FN   := $(notdir $(TESTSRC))
+BIN       := $(addprefix $(BINDIR)/,$(TEST_FN:.c=))
+
+##################################### emacs projectile/ccls dirs & files
 PRJROOT   := .projectile
+EMACSLSP  := .dir-locals.el
+
 CCLSROOT  := .ccls-root
+CCLSFILE  := .ccls
 CCLSCMDS  := compile_commands.json
 
 ##################################### pre-processor flags
 CPPFLAGS  := -I$(INCDIR)
 #CPPFLAGS  += -DDEBUG                                       # global
-CPPFLAGS  += -DDEBUG_DEBUG                                  # enable log() functions
 #CPPFLAGS  += -DDEBUG_DEBUG_C                               # log() funcs debug
-PPFLAGS   += -DDEBUG_DEBUG                                  # activate logs funcs
+CPPFLAGS  += -DDEBUG_DEBUG                                  # activate logs funcs
 CPPFLAGS  += -DDEBUG_POOL                                   # mem pools
 
 # remove extraneous spaces (due to spaces before comments)
@@ -78,15 +86,19 @@ LDFLAGS   := -L$(LIBDIR)
 DEPFLAGS   = -MMD -MP -MF $(DEPDIR)/$*.d
 
 ##################################### General targets
-.PHONY: all compile clean cleanall
+.PHONY: all compile clean cleanall cleanallall
 
 all: libs
 
 compile: objs
 
+test: testbins
+
 clean: cleandep cleanobj cleanlib cleanbin
 
 cleanall: clean cleandepdir cleanobjdir cleanlibdir cleanbindir
+
+cleanallall: cleanall cleanemacs
 
 # setup emacs projectile/ccls
 emacs: emacs-setup
@@ -141,7 +153,7 @@ alldirs: $(ALLDIRS)
 # a will be built if (1) older than a, or (2) does not exist. Here only (2).
 $(ALLDIRS): $@
 	@echo creating $@ directory.
-	@mkdir -p $@
+	@$(MKDIR) $@
 
 ##################################### Dependencies files
 .PHONY: cleandep cleandepdir
@@ -188,17 +200,18 @@ cleanlibdir:
 #$(DLIB): CFLAGS += -fPIC
 $(DLIB): LDFLAGS += -shared
 $(DLIB): $(OBJ) | $(LIBDIR)
-	@echo "building $@ shared library ($?)."
+	@echo "building shared library ($@)."
 	$(CC) $(CFLAGS) $(LDFLAGS) $? -o $@
 
 $(SLIB): $(OBJ) | $(LIBDIR)
-	@echo "building $@ static library ($?)."
+	@echo "building static library ($@)."
 	$(AR) $(ARFLAGS) $@ $? > /dev/null
 
-##################################### brchess binaries
-.PHONY: targets cleanbin cleanbindir
+##################################### tests
+.PHONY: testbins cleanbin cleanbindir
 
-targets: $(TARGET)
+testbins: $(BIN)
+	echo $^
 
 cleanbin:
 	$(call rmfiles,$(TARGET),binary)
@@ -215,27 +228,31 @@ cleanbindir:
 	@echo generating $@
 	@$(CC) -S -fverbose-asm $(CPPFLAGS) $(CFLAGS) $< -o $@
 
-##################################### LSP (ccls)
-.PHONY: emacs-setup
+##################################### Emacs
+.PHONY: emacs-setup cleanemacs
 
-PRJROOT   := .projectile
-CCLSROOT  := .ccls-root
-CCLSFILE  := .ccls
-CCLSCMDS  := compile_commands.json
+emacs-setup: $(PRJROOT) $(EMACSLSP)
 
-emacs-setup: $(PRJROOT) $(CCLSROOT) $(CCLSCMDS)
+cleanemacs:
+	$(call rmfiles, $(PRJROOT) $(EMACSLSP), Emacs);
 
-#$(CCLSFILE):
-#	@echo "creating CCLS's $@ project root file."
-#	echo '%compile_commands.json' > $@
-
-$(CCLSROOT) $(PRJROOT):
+$(PRJROOT) $(EMACSLSP):
 	@if [[ $(@) = $(PRJROOT) ]] ;                           \
 	then                                                    \
 		echo "creating Emacs's projectile root file." ; \
 	else                                                    \
 		echo "creating Emacs's ccls root file." ;       \
 	fi
+	@$(TOUCH) $@
+
+##################################### LSP (ccls)
+.PHONY: cleanccls
+
+cleanccls:
+	$(call rmfiles, $(CCLSROOT), ccls);
+
+$(CCLSROOT):
+	echo "creating ccls root file."
 	@$(TOUCH) $@
 
 # generate compile_commands.json.
