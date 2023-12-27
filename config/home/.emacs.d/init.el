@@ -756,19 +756,19 @@ in whole buffer.  With neither, delete comments on current line."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; vc-mode modeline
 ;; inspired from:
 ;; https://emacs.stackexchange.com/questions/10955
-(advice-add #'vc-git-mode-line-string :filter-return #'my-replace-git-status)
-(defun my-replace-git-status (tstr)
-  "Replace git `variable:vc-mode' string, for a modified icon followed by TSTR without \"git\"."
+(advice-add #'vc-git-mode-line-string :filter-return #'my/replace-git-status)
+(defun my/replace-git-status (tstr)
+  "Replace git `variable:vc-mode' string with a modified followed by TSTR."
   (let* ((tstr (replace-regexp-in-string "Git" "" tstr))
          (first-char (substring tstr 0 1))
          (rest-chars (substring tstr 1)))
     (cond
      ((string= ":" first-char)                    ; Modified
-      (replace-regexp-in-string "^:" "⚡️" tstr))
+      (replace-regexp-in-string "^:" "⚡" tstr))
      ((string= "-" first-char)                    ; No change
-      (replace-regexp-in-string "^-" "✔️" tstr))
+      (replace-regexp-in-string "^-" "✔" tstr))
      ((string= "@" first-char)                    ; Added
-      (replace-regexp-in-string "^@" "️✑" tstr))
+      (replace-regexp-in-string "^@" "✚" tstr))
      (t tstr))))
 
 (setf mode-line-modes
@@ -1170,13 +1170,13 @@ in whole buffer.  With neither, delete comments on current line."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; makefile mode
 (defun my/makefile-mode-hook ()
-  "X br text mode hook."
-  (message "entering Makefile-mode")
+  "X br makefile mode hook."
+  ;; (message "entering Makefile-mode")
   (setq indent-tabs-mode t
-        tab-width 4
+        tab-width 8
         comment-column 60))
 
-(add-hook 'text-mode-hook 'my/text-mode-hook)
+(add-hook 'makefile-mode-hook 'my/makefile-mode-hook)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; org mode
 ;; mediawiki export

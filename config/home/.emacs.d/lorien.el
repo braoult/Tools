@@ -35,17 +35,17 @@
 
   (defconst my/loaded-files-at-startup
     (list
+     "~/dev/tools/c/brlib/Makefile"
      "~/dev/brchess/Makefile"
-     "~/dev/tools/c/Makefile"
-     "~/org/boot-disk.org"
-     "~/org/beaglebone-buster-setup.org"
+     ;;"~/org/boot-disk.org"
+     ;;"~/org/beaglebone-buster-setup.org"
      ;;"~/dev/www/cf.bodi/sql/coc.sql"
      ;;"~/dev/www/cf.bodi/sql/coc-sql.org"
       user-init-file
-      "~/org/emacs-cheatsheet.org"
+      "~/org/emacs-cheatsheet.org")
       ;;"~/dev/g910/g910-gkey-macro-support/lib/data_mappers/char_uinput_mapper.py"
-      "~/dev/advent-of-code/2022/Makefile"
-      "~/dev/www/com.raoult/devs/php/chess/list-pgn-games.php")
+      ;;"~/dev/advent-of-code/2022/Makefile"
+      ;;"~/dev/www/com.raoult/devs/php/chess/list-pgn-games.php")
       ;; "~/dev/eudyptula/ID")
     "personal files always loaded at startup (no visible window).")
 
