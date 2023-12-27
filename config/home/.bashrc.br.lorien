@@ -32,14 +32,35 @@ if [[ -r ~/.my.cnf ]]; then
     done
 fi
 
-# shortcuts to commonly used directories
-# alias dev="cd ~/dev/www/cf.bodi"                     # Clash of Clans
-alias eud="cd ~/dev/eudyptula; . ./bin/ENV.sh"         # Eudyptula
-alias aoc="cd ~/dev/advent-of-code/2022/; . ../env.sh" # Advent of Code
-alias wchess="cd ~/dev/www/com.raoult/devs/chess"      # raoult.com chess
-alias chess="cd ~/dev/brchess; . env.sh"               # brchess
-alias tools="cd ~/dev/tools"                           # tools
-alias brlib="cd ~/dev/tools/c/brlib"                   # brlib dir/repo
+# shortcuts to commonly used directories/projects
+
+# _vardir() - define common dirs vars & aliases
+# $1: name variable to set
+# $2: name of alias to define
+# $3: script to source (relative to $2). '-' if no script.
+# $4: path
+#
+# _vardir will set a variable referencing $4, and an alias which will
+# change working directory to $1.
+# if $3 is not '-', it will be sourced. $3 path must be either absolute,
+# either relative to $4.
+#
+# Examples:
+# _vardir MYDIR mydir - ~/foo/mydirprj
+_vardir() {
+    local _v="$1" _a="$2" _s="$3" _p="$4"
+    local _x="cd $_p"
+    export "$_v"="$_p"
+    [[ $_s != "-" ]] && _x+="; . $_s"
+    # shellcheck disable=SC2139
+    alias "$_a"="$_x"
+}
+_vardir AOC    aoc    ./env.sh      ~/dev/advent-of-code    # Advent of code
+_vardir WCHESS wchess -             ~/dev/www/crd/chess     # raoult.com chess
+_vardir CHESS  chess  ./env.sh      ~/dev/brchess           # brchess
+_vardir TOOLS  tools  -             ~/dev/tools             # tools
+_vardir BRLIB  brlib  -             ~/dev/brlib             # brlib
+_vardir EUD    eud    ./bin/ENV.sh  ~/dev/eudyptula         # eudyptula
 
 # Indent style for emacs
 # Local Variables:
