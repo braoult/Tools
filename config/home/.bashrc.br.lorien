@@ -37,13 +37,14 @@ fi
 # _vardir() - define common dirs vars & aliases
 # $1: name variable to set
 # $2: name of alias to define
-# $3: script to source (relative to $2). '-' if no script.
-# $4: path
+# $3: script to source (relative to $2). '-': no script, '+': './script/env.sh'
+# $4: project path
 #
-# _vardir will set a variable referencing $4, and an alias which will
-# change working directory to $1.
-# if $3 is not '-', it will be sourced. $3 path must be either absolute,
-# either relative to $4.
+# _vardir() sets variable with $1 name to $4, and an alias with $2 name.
+# The alias, when invoked, will:
+#   (1) change working directory to $1
+#   (2) source $3 when $3 is not '-'. $3 path can be relative (preferred), or
+#       absolute. If $3 is "+", it will default to "./scripts/env.sh".
 #
 # Examples:
 # _vardir MYDIR mydir - ~/foo/mydirprj
@@ -51,16 +52,25 @@ _vardir() {
     local _v="$1" _a="$2" _s="$3" _p="$4"
     local _x="cd $_p"
     export "$_v"="$_p"
-    [[ $_s != "-" ]] && _x+="; . $_s"
+    case "$_s" in
+        -) ;;
+        +) _s="./scripts/env.sh" ;&
+        *) if [[ -r "$_p/$_s" ]]; then
+               _x+="; . $_s"
+           else
+               printf "%s: ignored.\n" "$_p/$_s"
+           fi
+    esac
     # shellcheck disable=SC2139
     alias "$_a"="$_x"
 }
-_vardir AOC    aoc    ./env.sh      ~/dev/advent-of-code    # Advent of code
-_vardir WCHESS wchess -             ~/dev/www/crd/chess     # raoult.com chess
-_vardir CHESS  chess  ./env.sh      ~/dev/brchess           # brchess
-_vardir TOOLS  tools  -             ~/dev/tools             # tools
-_vardir BRLIB  brlib  -             ~/dev/brlib             # brlib
-_vardir EUD    eud    ./bin/ENV.sh  ~/dev/eudyptula         # eudyptula
+_vardir AOC    aoc    +  ~/dev/advent-of-code     # Advent of code
+_vardir WCHESS wchess -  ~/dev/www/crd/chess      # raoult.com chess
+_vardir CHESS  chess  +  ~/dev/brchess            # brchess
+_vardir TOOLS  tools  -  ~/dev/tools              # tools
+_vardir BRLIB  brlib  -  ~/dev/brlib              # brlib
+_vardir EUD    eud    +  ~/dev/eudyptula          # eudyptula
+_vardir DEV    dev    -  ~/dev                    # dev
 
 # Indent style for emacs
 # Local Variables:
