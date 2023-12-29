@@ -35,14 +35,15 @@
 
   (defconst my/loaded-files-at-startup
     (list
-     "~/dev/tools/c/brlib/Makefile"
+     "~/dev/brlib/Makefile"
      "~/dev/brchess/Makefile"
      ;;"~/org/boot-disk.org"
      ;;"~/org/beaglebone-buster-setup.org"
      ;;"~/dev/www/cf.bodi/sql/coc.sql"
      ;;"~/dev/www/cf.bodi/sql/coc-sql.org"
-      user-init-file
-      "~/org/emacs-cheatsheet.org")
+     user-init-file
+     "~/dev/tools/bash/Makefile"
+     "~/org/emacs-cheatsheet.org")
       ;;"~/dev/g910/g910-gkey-macro-support/lib/data_mappers/char_uinput_mapper.py"
       ;;"~/dev/advent-of-code/2022/Makefile"
       ;;"~/dev/www/com.raoult/devs/php/chess/list-pgn-games.php")
