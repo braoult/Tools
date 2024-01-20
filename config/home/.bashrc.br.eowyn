@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+#
+# ~/.bashrc.br.eowyn - host specific initialization
+#
+# (C) Bruno Raoult ("br"), 2001-2024
+# Licensed under the GNU General Public License v3.0 or later.
+# Some rights reserved. See COPYING.
+#
+# You should have received a copy of the GNU General Public License along with this
+# program. If not, see <https://www.gnu.org/licenses/gpl-3.0-standalone.html>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later <https://spdx.org/licenses/GPL-3.0-or-later.html>
+#
+# Usage: to be invoked from .bashrc.$USER
+# i.e., add at the end of .bashrc.$USER:
+# [ -f "$HOME/.bashrc.$USER.$(hostname)" ] && . "$HOME/.bashrc.$USER.$(hostname)"
+
+# ibus
+#export GTK
+
+# look for a pdf viewer
+hash atril 2> /dev/null && alias acroread=atril
+
+# mysql aliases. Will match any "[client-XXX]" lines in ~/.my.cnf
+# and generate "myXXX" aliases.
+if [[ -r ~/.my.cnf ]]; then
+    mapfile -t MYSQL_ARRAY < ~/.my.cnf
+
+    for line in "${MYSQL_ARRAY[@]}"; do
+        if [[ $line =~ ^\[client-(.+)\]$ ]]; then
+            SUFFIX="${BASH_REMATCH[1]}"
+            # shellcheck disable=SC2139,SC2140
+            alias my"$SUFFIX"="mysql --defaults-group-suffix=-$SUFFIX"
+        fi
+    done
+fi
+
+# shortcuts to commonly used directories/projects
+
+# _vardir() - define common dirs vars & aliases
+# $1: name variable to set
+# $2: name of alias to define
+# $3: script to source (relative to $2). '-': no script, '+': './script/env.sh'
+# $4: project path
+#
+# _vardir() sets variable with $1 name to $4, and an alias with $2 name.
+# The alias, when invoked, will:
+#   (1) change working directory to $1
+#   (2) source $3 when $3 is not '-'. $3 path can be relative (preferred), or
+#       absolute. If $3 is "+", it will default to "scripts/env.sh".
+#
+# Examples:
+# _vardir MYDIR mydir - ~/foo/mydirprj
+_vardir() {
+    local _v="$1" _a="$2" _s="$3" _p="$4"
+    if [[ ! -d $_p ]]; then
+        printf "ignored project: %s\n" "$_p"
+        return 0
+    fi
+    local _x="cd $_p"
+    export "$_v"="$_p"
+    case "$_s" in
+        -) ;;
+        +) _s="scripts/env.sh" ;&
+        *) if [[ -r "$_p/$_s" ]]; then
+               _x+="; . $_s"
+           else
+               printf "%s: ignored.\n" "$_p/$_s"
+           fi
+    esac
+    # shellcheck disable=SC2139
+    alias "$_a"="$_x"
+}
+#_vardir AOC    aoc    +  ~/dev/advent-of-code     # Advent of code
+_vardir WCHESS wchess -  ~/dev/www/crd/chess      # raoult.com chess
+_vardir CHESS  chess  +  ~/dev/brchess            # brchess
+_vardir TOOLS  tools  -  ~/dev/tools              # tools
+_vardir BRLIB  brlib  -  ~/dev/brlib              # brlib
+#_vardir EUD    eud    +  ~/dev/eudyptula          # eudyptula
+_vardir DEV    dev    -  ~/dev                    # dev
+
+# Indent style for emacs
+# Local Variables:
+# mode: shell-script
+# sh-basic-offset: 4
+# sh-indentation: 4
+# indent-tabs-mode: nil
+# End:
