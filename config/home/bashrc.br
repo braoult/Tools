@@ -156,6 +156,15 @@ else
 fi
 export EDITOR=$VISUAL
 
+# look for a pdf viewer
+for _pdfviewer in qpdfview atril; do
+    if hash "$_pdfviewer" 2>/dev/null; then
+        alias acroread="$_pdfviewer"
+        break
+    fi
+done
+unset _pdfviewer
+
 # append to the history file, don't overwrite it
 shopt -s histappend
 # write history after each command

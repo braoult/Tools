@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# ~/.bashrc.br.lorien - host specific initialization
+# ~/.bashrc.br.eowyn - host specific initialization
 #
 # (C) Bruno Raoult ("br"), 2001-2024
 # Licensed under the GNU General Public License v3.0 or later.
@@ -14,9 +14,6 @@
 # Usage: to be invoked from .bashrc.$USER
 # i.e., add at the end of .bashrc.$USER:
 # [ -f "$HOME/.bashrc.$USER.$(hostname)" ] && . "$HOME/.bashrc.$USER.$(hostname)"
-
-# look for a pdf viewer
-hash atril 2> /dev/null && alias acroread=atril
 
 # mysql aliases. Will match any "[client-XXX]" lines in ~/.my.cnf
 # and generate "myXXX" aliases.
@@ -68,12 +65,12 @@ _vardir() {
     # shellcheck disable=SC2139
     alias "$_a"="$_x"
 }
-_vardir AOC    aoc    +  ~/dev/advent-of-code     # Advent of code
+#_vardir AOC    aoc    +  ~/dev/advent-of-code     # Advent of code
 _vardir WCHESS wchess -  ~/dev/www/crd/chess      # raoult.com chess
 _vardir CHESS  chess  +  ~/dev/brchess            # brchess
 _vardir TOOLS  tools  -  ~/dev/tools              # tools
 _vardir BRLIB  brlib  -  ~/dev/brlib              # brlib
-_vardir EUD    eud    +  ~/dev/eudyptula          # eudyptula
+#_vardir EUD    eud    +  ~/dev/eudyptula          # eudyptula
 _vardir DEV    dev    -  ~/dev                    # dev
 
 # Indent style for emacs

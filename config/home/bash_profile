@@ -13,5 +13,6 @@
 #   1) source .bashrc if it exists
 #   2) add "$HOME"/bin in PATH
 # This imply a duplicate "$HOME/bin" in PATH, as we do everything in .bashrc.$user.
+# Having this ~/.bash_profile will avoid the execution of ~/.profile
 
- [ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
+[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
