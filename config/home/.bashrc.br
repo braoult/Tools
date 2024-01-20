@@ -2,7 +2,7 @@
 #
 # ~/.bashrc.br - user specific initialization
 #
-# (C) Bruno Raoult ("br"), 2001-2023
+# (C) Bruno Raoult ("br"), 2001-2024
 # Licensed under the GNU General Public License v3.0 or later.
 # Some rights reserved. See COPYING.
 #
@@ -14,6 +14,12 @@
 # Usage: to be invoked from .bashrc.
 # i.e., add at the end of .bashrc:
 # [ -f "$HOME/.bashrc.$USER" ] && . "$HOME/.bashrc.$USER"
+#
+# Debian default ~/.profile does:
+#   1) source .bashrc if it exists
+#   2) add "$HOME"/bin in PATH
+# This imply a duplicate "$HOME/bin" in PATH, as we do everything here.
+# Better to have a ~/.bash_profile with the lines above.
 
 # _var_del() - remove an element from a colon-separated list.
 # $1: name (reference) of a colon separated list

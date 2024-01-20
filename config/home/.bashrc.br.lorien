@@ -2,7 +2,7 @@
 #
 # ~/.bashrc.br.lorien - host specific initialization
 #
-# (C) Bruno Raoult ("br"), 2001-2023
+# (C) Bruno Raoult ("br"), 2001-2024
 # Licensed under the GNU General Public License v3.0 or later.
 # Some rights reserved. See COPYING.
 #
@@ -44,17 +44,21 @@ fi
 # The alias, when invoked, will:
 #   (1) change working directory to $1
 #   (2) source $3 when $3 is not '-'. $3 path can be relative (preferred), or
-#       absolute. If $3 is "+", it will default to "./scripts/env.sh".
+#       absolute. If $3 is "+", it will default to "scripts/env.sh".
 #
 # Examples:
 # _vardir MYDIR mydir - ~/foo/mydirprj
 _vardir() {
     local _v="$1" _a="$2" _s="$3" _p="$4"
+    if [[ ! -d $_p ]]; then
+        printf "ignored project: %s\n" "$_p"
+        return 0
+    fi
     local _x="cd $_p"
     export "$_v"="$_p"
     case "$_s" in
         -) ;;
-        +) _s="./scripts/env.sh" ;&
+        +) _s="scripts/env.sh" ;&
         *) if [[ -r "$_p/$_s" ]]; then
                _x+="; . $_s"
            else
