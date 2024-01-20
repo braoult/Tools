@@ -1,7 +1,7 @@
 ﻿;;;; ~/.Emacs.d/init.el
 ;;;;
 ;;;; emacs configuration
-;;;; br, 2010-2023
+;;;; br, 2010-2024
 ;;;;
 ;;;; all personal variables/defun are prefixed with "my/".
 ;;
@@ -34,8 +34,7 @@
   "Directory where to store all temp and backup files.")
 (setq backup-directory (concat my/emacs-tmpdir "/backups/")
       save-directory (concat my/emacs-tmpdir "/autosave/")
-      auto-save-list-file-prefix (concat my/emacs-tmpdir "/autosave-list/")
-      )
+      auto-save-list-file-prefix (concat my/emacs-tmpdir "/autosave-list/"))
 
 ;; create dirs if necessary
 (dolist (dir (list backup-directory save-directory auto-save-list-file-prefix))
@@ -340,6 +339,9 @@ Return new LIST-VAR value."
       tramp-verbose 1)
 ;; (customize-set-variable 'tramp-syntax 'simplified)
 
+;; Emacs 29.1 ?
+;;(autoload #'tramp-register-crypt-file-name-handler "tramp-crypt")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; conf mode
 ;; strangely ".cnf" is not here...
 (use-package conf-mode
@@ -460,7 +462,7 @@ Return new LIST-VAR value."
       tab-width 2                                 ; default tab width
       )
 
-(setq-default indent-tabs-mode nil)
+(setq-default indent-tabs-mode nil)               ; no tabs
 
 (icomplete-mode 0)                                ; minibuffer completion
                                                   ; soooo sloooow
@@ -758,7 +760,7 @@ in whole buffer.  With neither, delete comments on current line."
 ;; https://emacs.stackexchange.com/questions/10955
 (advice-add #'vc-git-mode-line-string :filter-return #'my/replace-git-status)
 (defun my/replace-git-status (tstr)
-  "Replace git `variable:vc-mode' string with a modified followed by TSTR."
+  "Replace git `variable:vc-mode' string with a UTF8 symbol followed by TSTR."
   (let* ((tstr (replace-regexp-in-string "Git" "" tstr))
          (first-char (substring tstr 0 1))
          (rest-chars (substring tstr 1)))
@@ -891,10 +893,11 @@ in whole buffer.  With neither, delete comments on current line."
   :diminish helm-mode
   :init
   ;;(progn
-  ;;(require 'helm-config)
-  ;;(require 'helm-autoloads)
+  ;;  (require 'helm-config)
+  ;;  (require 'helm-autoloads)
   (require 'pcomplete)
   (require 'helm-projectile)
+  ;; (require 'tramp)
   (setq
    helm-candidate-number-limit 100
    ;; From https://gist.github.com/antifuchs/9238468
