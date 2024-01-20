@@ -565,8 +565,8 @@ parse_opts() {
     local c2="" c3=""
     local  -i  i
 
-    if ! tmp=$(getopt -o "$sopts" -l "$lopts" -n "$CMD" -- "$@"); then
-        log "Use '$CMD --help' or '$CMD --man' for help."
+    if ! tmp=$(getopt -o "$sopts" -l "$lopts" -n "$CMDNAME" -- "$@"); then
+        log "Use '$CMD --help' or 'zob $CMDNAME --man' for help."
         exit 1
     fi
 
