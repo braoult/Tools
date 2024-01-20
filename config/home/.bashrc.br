@@ -245,6 +245,19 @@ rehash() {
 alias trans="trans.sh"
 alias rtrans="trans.sh -fen -tfr"
 
+# easy directory sync (remove source trailing slash)
+syncdir() {
+    local -a opts=(--archive --hard-links --one-file-system --itemize-changes --delete)
+    local src="$1" dst="$2"
+    case "$src" in
+        *[!/]*/)
+            src=${src%"${src##*[!/]}"};;
+        *[/])
+            src="/";;
+    esac
+    rsync "${opts[@]}" "$src" "$dst"
+}
+
 # host specific initialization
 # shellcheck disable=SC1090
 [ -f "$HOME/.bashrc.$USER.$(hostname)" ] && . "$HOME/.bashrc.$USER.$(hostname)"
