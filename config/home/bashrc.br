@@ -159,6 +159,7 @@ export EDITOR=$VISUAL
 # look for a pdf viewer
 for _pdfviewer in qpdfview atril; do
     if hash "$_pdfviewer" 2>/dev/null; then
+        # shellcheck disable=SC2139
         alias acroread="$_pdfviewer"
         break
     fi
@@ -188,7 +189,7 @@ export QUOTING_STYLE=literal
 # avoid these stupid systemd defaults (horizontal scroll and pager)
 alias systemctl="systemctl --no-pager --full"
 
-# aliases for ls and history
+# useful aliases/functions
 alias l='ls -F'
 alias ls='ls -F'
 alias l1='ls -1F'
@@ -221,6 +222,10 @@ alias h="history   10"                            # short
 alias hl="history  25"                            # long
 alias hll="history 100"                           # very long
 alias hlll="history"                              # all history
+
+alias grep='grep --color=auto'                    # add colors to grep
+alias fgrep='fgrep --color=auto'
+alias egrep='egrep --color=auto'
 
 # user temp directory
 export USERTMP=~/tmp
