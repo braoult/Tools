@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# ~/.bashrc.br - user specific initialization
+# ~/.bashrc.root - root bash startup
 #
 # (C) Bruno Raoult ("br"), 2001-2024
 # Licensed under the GNU General Public License v3.0 or later.
@@ -80,7 +80,6 @@ _var_append() {
 # adjust PATH. Below paths will be added at beginning.
 _lpath=("$HOME/bin/$(uname -s)-$(uname -m)"
         "$HOME/bin"
-        #"$HOME/.cargo/bin"
         "/usr/local/bin")
 
 # loop array in reverse order. Note: We do not test for path existence and add it
@@ -90,11 +89,8 @@ for (( _i = ${#_lpath[@]} - 1; _i >= 0; --_i )); do
 done
 unset _lpath
 
-# why is it in default Ubuntu path ?
-_var_del PATH /snap/bin
-
 # enable core file
-ulimit -Sc 102400                                 # in 1024 bytes, 100Mb
+ulimit -HSc 102400              # in 1024 bytes - Really cannot use KiB :-)
 
 # ... and set PAGER to less (for man(1) and others)
 if hash less 2>/dev/null; then
@@ -131,42 +127,17 @@ e() {
 }
 export -f e
 
-# look for Emacs
-if hash emacs 2>/dev/null; then
-    # uncomment below to use full emacs
-    #export EDITOR=emacs
-    # ... OR: uncomment below to use emacsclient
-    #export ALTERNATE_EDITOR="/usr/bin/emacs"
-    #export EDITOR="emacs.sh"
-    #alias emacs="emacs.sh"
-    export ALTERNATE_EDITOR=""
-    export VISUAL="emacsclient -c"
-    alias emacs="emacsclient -c"
-    #alias crontab="VISUAL=emacsclient crontab -e"
-    #alias crontab="emacs-crontab.sh"
-else
-    # emacs clones, then vim/vi, then... whatever left.
-    _VISUALS=(zile jed mg e3em vim vi nano ed)
-
-    for e in "${_VISUALS[@]}"; do
-        if hash "$e" 2>/dev/null; then
-            export VISUAL="$e"
-            break
-        fi
-    done
-    unset _VISUALS
-fi
-export EDITOR=$VISUAL
-
-# look for a pdf viewer
-for _pdfviewer in qpdfview atril; do
-    if hash "$_pdfviewer" 2>/dev/null; then
-        # shellcheck disable=SC2139
-        alias acroread="$_pdfviewer"
+# no Emacs for root
+# emacs clones, then vim/vi, then... whatever left.
+_VISUALS=(zile mg jed vim vi nano ed)
+for e in "${_VISUALS[@]}"; do
+    if hash "$e" 2>/dev/null; then
+        export VISUAL="$e"
         break
     fi
 done
-unset _pdfviewer
+unset _VISUALS
+export EDITOR=$VISUAL
 
 # append to the history file, don't overwrite it
 shopt -s histappend
@@ -187,9 +158,6 @@ HISTFILESIZE=5000
 #    https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=813164#226
 export QUOTING_STYLE=literal
 [[ -v BASH_ALIASES[ls] ]] && unalias ls
-
-# avoid these stupid systemd defaults (horizontal scroll and pager)
-alias systemctl="systemctl --no-pager --full"
 
 # aliases/functions for ls and history
 alias l='ls -F'
@@ -229,60 +197,9 @@ alias grep='grep --color=auto'                    # add colors to grep
 alias fgrep='fgrep --color=auto'
 alias egrep='egrep --color=auto'
 
-# user temp directory
-export USERTMP=~/tmp
-
 # misc aliases
 alias fuck='sudo $(history -p \!\!)'
 alias diff='diff -u'
-# fdiff() - compare two files with same name
-# parameters:
-# $1: first file
-# $2: second file directory
-#
-# fdiff will compare (diff) $1 with a file of basename $1 in $2 directory.
-# Examples:
-# % fdiff .bashrc ~                # compare .bashrc with ~/.bashrc
-# % fdiff /tmp/.bashrc /home/br/   # compare /tmp/.bashrc with /home/br/.bashrc
-
-fdiff () {
-    local file1="$1"                              # file to compare
-    local file2="$2/${file1##*/}"                 # file2 with path
-
-    diff "$file1" "$file2"
-}
-
-# I am used to rehash...
-# rehash - manage bash's remembered commands paths
-# $1...: Only forget those commands
-rehash() {
-    if (($#)); then
-        hash -d "$@"
-    else
-        hash -r
-    fi
-}
-
-# french-> english and english->french translation
-alias trans="trans.sh"
-alias rtrans="trans.sh -fen -tfr"
-
-# easy directory sync (remove source trailing slash)
-syncdir() {
-    local -a opts=(--archive --hard-links --one-file-system --itemize-changes --delete)
-    local src="$1" dst="$2"
-    case "$src" in
-        *[!/]*/)
-            src=${src%"${src##*[!/]}"};;
-        *[/])
-            src="/";;
-    esac
-    rsync "${opts[@]}" "$src" "$dst"
-}
-
-# host specific initialization
-# shellcheck disable=SC1090
-[ -f "$HOME/.bashrc.$USER.$(hostname)" ] && . "$HOME/.bashrc.$USER.$(hostname)"
 
 # Indent style for emacs
 # Local Variables:
@@ -290,4 +207,5 @@ syncdir() {
 # sh-basic-offset: 4
 # sh-indentation: 4
 # indent-tabs-mode: nil
+# comment-column: 32
 # End:
