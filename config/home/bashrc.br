@@ -100,7 +100,7 @@ ulimit -Sc 102400                                 # in 1024 bytes, 100Mb
 if hash less 2>/dev/null; then
     export PAGER=less
     # do not clear screen after "less", exit immediately if one page only
-    export LESS="-XFB"
+    export LESS="--quit-if-one-screen --no-init"
     # ... and just alias more... to less ;-)
     alias more=less
 fi
@@ -131,8 +131,7 @@ e() {
 }
 export -f e
 
-# look for Emacs
-if hash emacs 2>/dev/null; then
+if hash emacs 2>/dev/null; then                   # look for Emacs...
     # uncomment below to use full emacs
     #export EDITOR=emacs
     # ... OR: uncomment below to use emacsclient
@@ -144,8 +143,7 @@ if hash emacs 2>/dev/null; then
     alias emacs="emacsclient -c"
     #alias crontab="VISUAL=emacsclient crontab -e"
     #alias crontab="emacs-crontab.sh"
-else
-    # emacs clones, then vim/vi, then... whatever left.
+else                                              # ... or clones, vim/vi, etc...
     _VISUALS=(zile jed mg e3em vim vi nano ed)
 
     for e in "${_VISUALS[@]}"; do
@@ -158,8 +156,8 @@ else
 fi
 export EDITOR=$VISUAL
 
-# look for a pdf viewer
-for _pdfviewer in qpdfview atril; do
+for _pdfviewer in qpdfview atril; do              # look for a pdf viewer
+
     if hash "$_pdfviewer" 2>/dev/null; then
         # shellcheck disable=SC2139
         alias acroread="$_pdfviewer"
