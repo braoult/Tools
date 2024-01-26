@@ -78,10 +78,12 @@ _var_append() {
 }
 
 # adjust PATH. Below paths will be added at beginning.
-_lpath=("$HOME/bin/$(uname -s)-$(uname -m)"
-        "$HOME/bin"
+_lpath=("$HOME/bin/$(uname -s)-$(uname -m)"       # architecture specific
+        "$HOME/bin"                               # user scripts
+        "$HOME/.local/bin"                        # pip venv
         #"$HOME/.cargo/bin"
-        "/usr/local/bin")
+        "/usr/local/bin"
+       )
 
 # loop array in reverse order. Note: We do not test for path existence and add it
 # unconditionally, to avoid automounter interference.
@@ -189,7 +191,7 @@ export QUOTING_STYLE=literal
 # avoid these stupid systemd defaults (horizontal scroll and pager)
 alias systemctl="systemctl --no-pager --full"
 
-# aliases/functions for ls and history
+# aliases/functions for usual commands (ls, history, grep...)
 alias l='ls -F'
 alias ls='ls -F'
 alias l1='ls -1F'
