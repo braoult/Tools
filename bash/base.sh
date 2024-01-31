@@ -88,6 +88,9 @@ EXAMPLES
   $ $CMDNAME -nxg: 123456
   1:e240
 
+  Long options, with separator and padding:
+  $ $CMDNAME --to=16 --noprefix --padding --group=: 12345
+  0001:e240
 _EOF
 }
 
