@@ -22,12 +22,12 @@ usage() {
 help() {
     cat << _EOF
 usage: $CMDNAME [OPTIONS] [NUMBER]...
-  -f, --from=BASE      input base. Default is "g"
-  -t, --to=BASE        output base. Default is "a"
-  -2, -8, -d, -x       equivalent to -t2, -t8, -t10, -t16"
+  -f, --from=BASE      input base, see BASE below. Default is "g"
+  -t, --to=BASE        output base, see BASE below. Default is "a"
+  -b, -o, -d, -x       equivalent to -t2, -t8, -t10, -t16"
   -g, --group=[SEP]    group output (see OUTPUT below)
-  -0, --padding        Not implemented. 0-pad output on block boundary (implies -g)
-  -n, --noprefix       Remove base prefixes in output
+  -p, --padding        0-pad output on block boundary (implies -g)
+  -n, --noprefix       remove base prefixes in output
   -h, --help           this help
 
 $CMDNAME output the NUMBERS arguments in different bases. If no NUMBER is
@@ -40,6 +40,7 @@ BASE
   16, h, H, 0x         hexadecimal
   a, g                 all/any: Default, guess format for '-f', output all
                        bases for '-t'
+
 INPUT NUMBER
   If input base is not specified, some prefixes are supported.
   'b' or '2/' for binary, '0', 'o' or '8/' for octal, '0x', 'x' or
@@ -47,32 +48,52 @@ INPUT NUMBER
   If no prefix, decimal is assumed.
 
 OUTPUT
-  By default, output is the input number converted in the 4 supported
-  bases (16, 10, 8, 2, in this order, separated by one tab character.
+  By default, the input number is shown converted in the 4 supported
+  bases (16, 10, 8, 2, in this order), separated by one tab character.
   Without '-n' option, all output numbers but decimal will be prefixed:
   '2#' for binary, '0' for octal, '0x' for hexadecimal, making them
   usable for input in some otilities such as bash(1).]
   With '-g' option, number digits will be grouped by 3 (octal,
-  decimal), or 4 (binary, hexadecimal)\n. If no SEP character is given,
+  decimal), 4 (hexadecimal), or 8 (binary). If no SEP character is given,
   the separator will be ',' (comma) for decimal, space otherwise.
-  This option may be useless if default output, with multiple numbers
+  This option may be useless for default output, with multiple numbers
   on one line.
-  The '-0' option will left pad with '0' (zeros) to a group boundary.
+  The '-p' option add 0 padding up to the base grouping boundary.
 
 EXAMPLES
+  Converting number in hexadecimal, decimal, octal, and binary, with or without
+  prefixes. Here, '\t' separator is shown as space:
+  $ $CMDNAME 0
+  0x0 0 0 2#0
+
+  $ $CMDNAME -n 2/100
+  4 4 4 100
+
   $ $CMDNAME 123456
-  2#11110001001000000 0361100 123456 0x1e240
-  $ $CMDNAME -n 123456
-  11110001001000000 361100 123456 1e240
-  $ $CMDNAME -ng2 012345
-  1 0100 1110 0101
-  $ $CMDNAME -n2 012345
-  1 0100 1110 0101
+  0x1e240 123456 0361100 2#11110001001000000
+
+  $ $CMDNAME -n 0x1e240
+  1e240	123456	361100	11110001001000000
+
+  Binary output, no prefix, grouped output:
+  $ $CMDNAME -bng 0x1e240
+  1 11100010 01000000
+
+  Input base indication, left padding binary output, no prefix:
+  $ $CMDNAME -nbp -f8 361100
+  00000001 11100010 01000000
+
+  Set group separator. Note that the separator *must* immediately follow the '-g'
+  option, without spaces:
+  $ $CMDNAME -nxg: 123456
+  1:e240
+
 _EOF
 }
 
 # some default values  (blocks separator padchar)
-declare -i ibase=0 obase=0 padding=0 noprefix=0 ogroup=0
+# Attention: For output base 10, obase is 1
+declare -i ibase=0 obase=0 padding=0 prefix=1 ogroup=0
 
 declare -rA _bases=(
     [2]=2 [b]=2 [B]=2
@@ -85,22 +106,16 @@ declare -A _pad=(
     [2]=" " [8]=" " [10]="," [16]=" "
 )
 declare -rA _ogroup=(
-    [2]=4 [8]=3 [10]=3 [16]=4
+    [2]=8 [8]=3 [10]=3 [16]=4
 )
 declare -rA _oprefix=(
     [2]="2#" [8]="0" [10]="" [16]="0x"
 )
 
 zero_pad() {
-    local base="$1" str="$2"
-    local str="$1"
-    local -i n=${_ogroup[$base]}
+    local n="$1" str="$2"
 
-    #printf "str=$str #=${#str}" >&2
-    while (( ${#str} < $2 )); do
-        str="0$str"
-    done
-    printf "%s" "$str"
+    printf "%0.*d%s" $(( n - ${#str} % n))  0 "$str"
 }
 
 split() {
@@ -108,14 +123,16 @@ split() {
     local res="$str" sep=${_pad[$base]}
     local -i n=${_ogroup[$base]}
 
+    (( padding )) && str=$(zero_pad "${_ogroup[$base]}" "$str")
     if (( ogroup )); then
         res=""
         while (( ${#str} )); do
-            if (( ${#str} < n )); then
-                str=$(zero_pad "$str" $n)
+            if (( ${#str} <= n )); then           # finished
+                res="${str}${res:+$sep$res}"
+                break
             fi
-            res="${str: -$n}${res:+$sep$res}"
-            str="${str:0:-$n}"
+            res="${str: -n}${res:+$sep$res}"
+            str="${str:0:-n}"
         done
     fi
     printf "%s" "$res"
@@ -126,7 +143,7 @@ bin() {
     for (( n = $1 ; n > 0 ; n >>= 1 )); do
         bits=$((n&1))$bits
     done
-    printf "%s\n" "${bits-0}"
+    printf "%s\n" "${bits:-0}"
 }
 
 hex() {
@@ -145,7 +162,7 @@ declare -a args=()
 
 parse_opts() {
     # short and long options
-    local sopts="f:t:28dxg::pnh"
+    local sopts="f:t:bodxg::pnh"
     local lopts="from:,to:,group::,padding,noprefix,help"
     # set by options
     local tmp=""
@@ -174,9 +191,9 @@ parse_opts() {
                 fi
                 shift
                 ;;
-            "-2") obase=2 ;;
-            "-8") obase=8 ;;
-            "-d") obase=10 ;;
+            "-b") obase=2 ;;
+            "-o") obase=8 ;;
+            "-d") obase=1 ;;
             "-x") obase=16 ;;
             "-g"|"--group")
                 ogroup=1
@@ -185,8 +202,8 @@ parse_opts() {
                 fi
                 shift
                 ;;
-            "-p"|"--padding") padding=1 ;;
-            "-n"|"--noprefix") noprefix=1 ;;
+            "-p"|"--padding") ogroup=1; padding=1 ;;
+            "-n"|"--noprefix") prefix=0 ;;
             "-h"|"--help") help ; exit 0 ;;
             "--") shift; break ;;
             *) usage; echo "Internal error [$1]!" >&2; exit 1 ;;
@@ -199,19 +216,20 @@ parse_opts() {
     fi
 }
 
-# shellcheck disable=SC2317
 addprefix() {
-    local base="$1" number="$2"
-    local prefix=""
-    (( noprefix )) || prefix="${_oprefix[$base]}"
-    printf "%s%s" "$prefix" "$number"
+    local base="$1" number="$2" _prefix=""
+    if (( prefix )); then
+        if [[ $base != 8 || $number != "0" ]]; then
+            _prefix="${_oprefix[$base]}"
+        fi
+    fi
+    printf "%s%s" "$_prefix" "$number"
 }
 
 stripprefix() {
     local number="$1"
     number=${number#0x}
-    number=${number#[bodx0]}
-    number=${number#0}
+    number=${number#[bodx]}
     number=${number#*/}
     printf "%s" "$number"
 }
