@@ -14,6 +14,31 @@
 
 CMDNAME=${0##*/}                                  # script name
 
+# some default values  (blocks separator padchar)
+# Attention: For output base 10, obase is 1
+declare -i ibase=0 obase=0 padding=0 prefix=1 ogroup=0 intbits
+
+# find out int size (bits) - suppose 2-complement, and 8 bits char
+printf -v _b "%x" -1
+(( intbits = ${#_b} * 4 ))
+
+declare -rA _bases=(                              # -f/-b accepted values
+    [2]=2   [b]=2  [B]=2
+    [8]=8   [o]=8  [O]=8
+    [10]=10 [d]=10 [D]=10
+    [16]=16 [h]=16 [H]=16
+    [a]=-1 [g]=-1
+)
+declare -A _pad=(                                 # group separator
+    [2]=" " [8]=" " [10]="," [16]=" "
+)
+declare -rA _ogroup=(                             # group size
+    [2]=8 [8]=3 [10]=3 [16]=4
+)
+declare -rA _oprefix=(                            # output prefix
+    [2]="2#" [8]="0" [10]="" [16]="0x"
+)
+
 usage() {
     printf "usage: %s [OPTIONS] [NUMBER]...\n" "$CMDNAME"
     printf  "Use '%s -h' for more help\n" "$CMDNAME"
@@ -29,6 +54,7 @@ usage: $CMDNAME [OPTIONS] [NUMBER]...
   -p, --padding        0-pad output on block boundary (implies -g)
   -n, --noprefix       remove base prefixes in output
   -h, --help           this help
+  --                   end of options
 
 $CMDNAME output the NUMBERS arguments in different bases. If no NUMBER is
 given, standard input will be used.
@@ -45,9 +71,12 @@ INPUT NUMBER
   If input base is not specified, some prefixes are supported.
   'b' or '2/' for binary, '0', 'o' or '8/' for octal, '0x', 'x' or
   '16/' for hexadecimal, and 'd' or '10/' for decimal.
-  If no prefix, decimal is assumed.
+  If no above prefix is found, decimal is assumed.
+  Decimal input may be signed or unsigned, with limits imposed by current
+  Bash (here: $intbits bits).
 
 OUTPUT
+  Decimal output is always unsigned.
   By default, the input number is shown converted in the 4 supported
   bases (16, 10, 8, 2, in this order), separated by one tab character.
   Without '-n' option, all output numbers but decimal will be prefixed:
@@ -66,11 +95,11 @@ EXAMPLES
   $ $CMDNAME 0
   0x0 0 0 2#0
 
-  $ $CMDNAME -n 2/100
-  4 4 4 100
-
   $ $CMDNAME 123456
   0x1e240 123456 0361100 2#11110001001000000
+
+  $ $CMDNAME -n 2/100
+  4 4 4 100
 
   $ $CMDNAME -n 0x1e240
   1e240	123456	361100	11110001001000000
@@ -78,6 +107,10 @@ EXAMPLES
   Binary output, no prefix, grouped output:
   $ $CMDNAME -bng 0x1e240
   1 11100010 01000000
+
+  Negative input (decimal only):
+  $ $CMDNAME -x -- -1
+  0xffffffffffffffff
 
   Input base indication, left padding binary output, no prefix:
   $ $CMDNAME -nbp -f8 361100
@@ -91,29 +124,12 @@ EXAMPLES
   Long options, with separator and padding:
   $ $CMDNAME --to=16 --noprefix --padding --group=: 12345
   0001:e240
+
+TODO
+  Add option for signed/unsigned integer output.
+  Remove useless octal output ?
 _EOF
 }
-
-# some default values  (blocks separator padchar)
-# Attention: For output base 10, obase is 1
-declare -i ibase=0 obase=0 padding=0 prefix=1 ogroup=0
-
-declare -rA _bases=(
-    [2]=2 [b]=2 [B]=2
-    [8]=8 [o]=8 [O]=8 [0]=8
-    [10]=10 [d]=10 [D]=10
-    [16]=16 [h]=16 [H]=16 [0x]=16
-    [a]=-1 [g]=-1
-)
-declare -A _pad=(
-    [2]=" " [8]=" " [10]="," [16]=" "
-)
-declare -rA _ogroup=(
-    [2]=8 [8]=3 [10]=3 [16]=4
-)
-declare -rA _oprefix=(
-    [2]="2#" [8]="0" [10]="" [16]="0x"
-)
 
 zero_pad() {
     local n="$1" str="$2"
@@ -142,11 +158,16 @@ split() {
 }
 
 bin() {
-    local n bits=""
-    for (( n = $1 ; n > 0 ; n >>= 1 )); do
-        bits=$((n&1))$bits
+    local str=""
+    local -i n dec="$1"
+
+    # take care of negative numbers, as >> operator keeps the sign.
+    # 'intbits' is size of integer in bits in current shell.
+    for (( n = 0 ; dec && (n < intbits); n++ )); do
+        str="$(( dec & 1 ))$str"
+        (( dec >>= 1 ))
     done
-    printf "%s\n" "${bits:-0}"
+    printf "%s\n" "${str:-0}"
 }
 
 hex() {
@@ -213,8 +234,8 @@ parse_opts() {
         esac
         shift
     done
-    # parse remaining arguments
-    if (($# > 0)); then                               # type
+    # next are numbers to convert, if any
+    if (($# > 0)); then
         args=("$@")
     fi
 }
@@ -230,23 +251,20 @@ addprefix() {
 }
 
 stripprefix() {
-    local number="$1"
-    number=${number#0x}
-    number=${number#[bodx]}
-    number=${number#*/}
-    printf "%s" "$number"
+    [[ $1 =~ ^(0x|b|o|d|x|.*/) ]]
+    printf "%s" "${1#"${BASH_REMATCH[1]}"}"
 }
 
 guessbase() {
     local input="$1"
     local -i base=0
-    if [[ $input =~ ^b || $input =~ ^2/ ]]; then
+    if [[ $input =~ ^(b|2/) ]]; then
         base=2
-    elif [[ $input =~ ^0x || $input =~ ^x || $input =~ ^16/ ]]; then
+    elif [[ $input =~ ^(0x|x|16/) ]]; then
         base=16
-    elif [[ $input =~ ^0 || $input =~ ^o || $input =~ ^8/ ]]; then
+    elif [[ $input =~ ^(0|o|8/) ]]; then
         base=8
-    elif [[ $input =~ ^d || $input =~ ^10/ ]]; then
+    elif [[ $input =~ ^(d|10/) ]]; then
         base=10
     fi
     return $(( base ? base : 10 ))
@@ -261,7 +279,9 @@ doit() {
     fi
 
     inum=$(stripprefix "$number")
-    (( decval = "$base#$inum" ))                  # input value in decimal
+    # convert input value to decimal
+    (( base == 10 )) && (( decval = inum ))
+    (( base != 10 )) && (( decval = "$base#$inum" ))
 
     # mask for desired output: 1=decimal, others are same as base
     if (( ! _obase )); then
