@@ -311,7 +311,7 @@ doit() {
 parse_opts "$@"
 
 if ! (( ${#args[@]} )); then
-    while read -ra line; do
+    while read -era line; do
         for input in "${line[@]}"; do
             doit "ibase" "$input"
         done
