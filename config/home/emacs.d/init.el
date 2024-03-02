@@ -75,6 +75,8 @@
 (defun risky-local-variable-p (sym &optional _ignored) "Zoba SYM." nil)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; swap modifier keysyms (japanese keyboard)
+;; Done in .xmodmap
+;;
 ;; windows key (super) becomes hyper
 ;;(setq x-super-keysym 'hyper)
 ;; alt key (meta) becomes super
@@ -300,8 +302,10 @@ Return new LIST-VAR value."
   :config
   (setq magit-delete-by-moving-to-trash nil
         magit-clone-default-directory "~/dev/")
-  (magit-auto-revert-mode -1))
-
+  (magit-auto-revert-mode -1)
+  :bind
+  (("C-c g" . magit-file-dispatch)
+   ("C-x g" . magit-status)))
 
 (use-package git-gutter
   :diminish
@@ -430,12 +434,13 @@ Return new LIST-VAR value."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Some useful setups
 ;; mouse
 ;; does not change point when getting focus - DOES NOT WORK
-;;x-mouse-click-focus-ignore-position t
+;; (setq x-mouse-click-focus-ignore-position t)
 ;;focus-follows-mouse nil                ; must reflect WM settings
 ;;mouse-autoselect-window nil            ; pointer does not select window
 
 (global-set-key (kbd "C-h c") 'describe-char)
 (global-set-key (kbd "C-x 4 C-b") 'switch-to-buffer-other-window)
+(global-unset-key [mode-line mouse-3])            ; unset awful modeline mouse-3
 
 ;; next example maps C-x C-x to the same as C-c
 ;; (global-set-key (kbd "C-x C-x") (lookup-key global-map (kbd "C-c")))
@@ -712,6 +717,25 @@ in whole buffer.  With neither, delete comments on current line."
     (while (re-search-forward "\\(^[[:space:]\n]+\\)\n" nil t)
       (replace-match "\n"))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; multiple cursors
+(use-package multiple-cursors
+  :bind
+  (("C-c m t"       . mc/mark-all-like-this)
+   ("C-c m m"       . mc/mark-all-like-this-dwim)
+   ("C-c m l"       . mc/edit-lines)
+   ("C-c m e"       . mc/edit-ends-of-lines)
+   ("C-c m a"       . mc/edit-beginnings-of-lines)
+   ("C-c m n"       . mc/mark-next-like-this)
+   ("C-c m p"       . mc/mark-previous-like-this)
+   ("C-c m s"       . mc/mark-sgml-tag-pair)
+   ("C-c m d"       . mc/mark-all-like-this-in-defun)
+   ("C->"           . mc/mark-next-like-this)
+   ("C-<"           . mc/mark-previous-like-this)
+   ("C-S-<mouse-1>" . mc/add-cursor-on-click)
+   ("C-M-m"         . mc/mark-all-dwim)))
+(use-package phi-search)
+(use-package phi-search-mc :config (phi-search-mc/setup-keys))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; shell, eshell modes
 ;; will tell e-shell to run in visual mode
 '(eshell-visual-commands
@@ -844,16 +868,6 @@ in whole buffer.  With neither, delete comments on current line."
 
 (global-set-key (kbd "C-x w") 'compare-windows)
 
-;; multiple cursors
-(global-set-key (kbd "C->") 'mc/mark-next-like-this)
-(global-set-key (kbd "C-<") 'mc/mark-previous-like-this)
-(global-set-key (kbd "C-c C-<") 'mc/mark-all-like-this)
-(global-set-key (kbd "C-S-<mouse-1>") 'mc/add-cursor-on-click)
-(global-set-key (kbd "C-M-m") 'mc/mark-all-dwim)
-
-(global-set-key (kbd "C-x g") 'magit-status)
-
-;; (global-set-key (kbd "s-SPC") 'delete-blank-lines)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; define my own keymap (s-c)
 ;; first, define a keymap, with Super-c as prefix.
 (defvar my/keys-mode-map (make-sparse-keymap)
@@ -1177,7 +1191,13 @@ in whole buffer.  With neither, delete comments on current line."
   ;; (message "entering Makefile-mode")
   (setq indent-tabs-mode t
         tab-width 8
-        comment-column 60))
+        comment-column 60
+        comment-fill-column 120)
+  ;;(defadvice comment-indent (around indent-to activate)
+  ;;  "Disable indent-tab-mode when indenting comment."
+  ;;  (lambda (fun &rest args) (let (indent-tabs-mode) (apply fun args))))
+
+)
 
 (add-hook 'makefile-mode-hook 'my/makefile-mode-hook)
 
@@ -2115,8 +2135,8 @@ The output will appear in the buffer *PHP*."
 ;;; c-mode
     (sp-with-modes '(c-mode c++-mode)
       (sp-local-pair "{" nil :post-handlers '(("||\n[i]" "RET")))
-      (sp-local-pair "/*" "*/" :post-handlers '((" | " "SPC")
-                                                      ("* ||\n[i]" "RET"))))
+      (sp-local-pair "/*" "*/" :post-handlers '(("| " "SPC")
+                                                ("* ||\n[i]" "RET"))))
 ;;; markdown-mode
     (sp-with-modes '(markdown-mode gfm-mode rst-mode)
       (sp-local-pair "*" "*" :bind "C-*")
@@ -2192,14 +2212,20 @@ The output will appear in the buffer *PHP*."
   :ensure t
   ;;:diminish
   :config
-  (setq ; lsp-ui-doc-show-with-cursor        t
-        ; lsp-ui-doc-show-with-mouse         t
-        lsp-ui-sideline-enable             t
-        lsp-ui-sideline-show-code-actions  t
-        lsp-ui-sideline-enable             t
+  (setq lsp-ui-doc-show-with-cursor        t
+        lsp-ui-doc-show-with-mouse         nil
+
+        lsp-ui-sideline-enable             nil
         lsp-ui-sideline-show-hover         t
-        lsp-ui-sideline-enable             t
-        lsp-ui-doc-enable                  nil)
+        lsp-ui-sideline-show-symbol        t
+        lsp-ui-sideline-show-code-actions  t
+        ;; lsp-ui-doc-enable                  nil
+        ;; TRIED 2024/02/26
+        lsp-ui-doc-enable                  t
+        lsp-ui-doc-max-width               80
+        lsp-ui-doc-max-height              20
+        lsp-ui-doc-include-signature       t      ; type signature in doc
+        lsp-ui-doc-position                'top)
 
   :commands
   (lsp-ui-mode)
