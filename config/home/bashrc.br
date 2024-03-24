@@ -158,8 +158,7 @@ else                                              # ... or clones, vim/vi, etc..
 fi
 export EDITOR=$VISUAL
 
-for _pdfviewer in qpdfview atril; do              # look for a pdf viewer
-
+for _pdfviewer in atril qpdfview; do              # look for a pdf viewer
     if hash "$_pdfviewer" 2>/dev/null; then
         # shellcheck disable=SC2139
         alias acroread="$_pdfviewer"

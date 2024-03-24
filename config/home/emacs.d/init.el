@@ -15,6 +15,7 @@
 ;; (require 'use-package)
 (package-initialize)
 (setq use-package-always-ensure t)
+(use-package delight :ensure t)
 
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/"))
 ;;(add-to-list 'package-archives '("org" . "http://orgmode.org/elpa/"))
@@ -255,23 +256,33 @@ Return new LIST-VAR value."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; ggtags
 (use-package ggtags
   :ensure t
-  :diminish ggtags-mode
+  :diminish "gg"
   :disabled t
-  :defer t
+  ;; :defer t
+  :after cc-mode
   :init
   (setq ggtags-global-window-height 28
         ggtags-enable-navigation-keys nil)
-
-  (after cc-mode (add-hook 'c-mode-common-hook #'ggtags-mode))
+  (add-hook 'c-mode-common-hook
+            (lambda ()
+              (when (derived-mode-p 'c-mode 'c++-mode 'java-mode)
+                (ggtags-mode 1))))
+  ;;(after cc-mode (add-hook 'c-mode-common-hook #'ggtags-mode))
 
   :config
   (bind-keys :map ggtags-mode-map
-             ("C-c g s" . ggtags-find-other-symbol)
-             ("C-c g h" . ggtags-view-tag-history)
-             ("C-c g r" . ggtags-find-reference)
-             ("C-c g f" . ggtags-find-file)
-             ("C-c g c" . ggtags-create-tags)
-             ("C-c g u" . ggtags-update-tags)
+             ;;("C-c g s" . ggtags-find-other-symbol)
+             ;;("C-c g h" . ggtags-view-tag-history)
+             ;;("C-c g r" . ggtags-find-reference)
+             ;;("C-c g f" . ggtags-find-file)
+             ;;("C-c g c" . ggtags-create-tags)
+             ;;("C-c g u" . ggtags-update-tags)
+             ("H-g s" . ggtags-find-other-symbol)
+             ("H-g h" . ggtags-view-tag-history)
+             ("H-g r" . ggtags-find-reference)
+             ("H-g f" . ggtags-find-file)
+             ("H-g c" . ggtags-create-tags)
+             ("H-g u" . ggtags-update-tags)
              ("M-," 'pop-tag-mark)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; projectile
@@ -279,6 +290,7 @@ Return new LIST-VAR value."
 (use-package projectile
   ;;:diminish projectile-mode
   :diminish " prj"
+  ;; :delight
   :ensure t
   :config
   ;;(define-key projectile-mode-map (kbd "s-p") 'projectile-command-map)
@@ -288,7 +300,9 @@ Return new LIST-VAR value."
         ;;projectile-indexing-method 'alien  ;; does not use ".projectile"
         projectile-indexing-method 'hybrid
         ;;projectile-indexing-method 'native
-        projectile-completion-system 'default)
+        projectile-completion-system 'auto
+        projectile-tags-backend 'ggtags)
+
   (add-to-list 'projectile-globally-ignored-files "*.png")
   (projectile-mode +1))
 
@@ -440,7 +454,8 @@ Return new LIST-VAR value."
 
 (global-set-key (kbd "C-h c") 'describe-char)
 (global-set-key (kbd "C-x 4 C-b") 'switch-to-buffer-other-window)
-(global-unset-key [mode-line mouse-3])            ; unset awful modeline mouse-3
+(global-unset-key [mode-line mouse-3])            ; so disturbing mouse-3 there !
+
 
 ;; next example maps C-x C-x to the same as C-c
 ;; (global-set-key (kbd "C-x C-x") (lookup-key global-map (kbd "C-c")))
@@ -868,31 +883,34 @@ in whole buffer.  With neither, delete comments on current line."
 
 (global-set-key (kbd "C-x w") 'compare-windows)
 
+;; as dot-mode uses <insert>, we allow overwrite-mode with S-<insert>
+(global-set-key (kbd "S-<insert>") 'overwrite-mode)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; define my own keymap (s-c)
 ;; first, define a keymap, with Super-c as prefix.
-(defvar my/keys-mode-map (make-sparse-keymap)
-  "Keymap for my/keys-mode.")
+;; (defvar my/keys-mode-map (make-sparse-keymap)
+;;   "Keymap for my/keys-mode.")
 
-(defvar my/keys-mode-prefix-map (lookup-key global-map (kbd "s-c"))
-  "Keymap for custom key bindings starting with s-c prefix.")
+;; (defvar my/keys-mode-prefix-map (lookup-key global-map (kbd "s-c"))
+;;   "Keymap for custom key bindings starting with s-c prefix.")
 
-;; (define-key my/keys-mode-map (kbd "s-c") my/keys-mode-prefix-map)
+;; ;; (define-key my/keys-mode-map (kbd "s-c") my/keys-mode-prefix-map)
 
-(define-minor-mode my/keys-mode
-  "A minor mode for custom key bindings."
-  :lighter "s-c"
-  :keymap 'my/keys-mode-map
-  :global t)
+;; (define-minor-mode my/keys-mode
+;;   "A minor mode for custom key bindings."
+;;   :lighter "s-c"
+;;   :keymap 'my/keys-mode-map
+;;   :global t)
 
-(defun my/prioritize-keys
-    (file &optional noerror nomessage nosuffix must-suffix)
-  "Try to ensure that custom key bindings always have priority."
-  (unless (eq (caar minor-mode-map-alist) 'my/keys-mode)
-    (let ((my/keys-mode-map (assq 'my/keys-mode minor-mode-map-alist)))
-      (assq-delete-all 'my/keys-mode minor-mode-map-alist)
-      (add-to-list 'minor-mode-map-alist my/keys-mode-map))))
+;; (defun my/prioritize-keys
+;;     (file &optional noerror nomessage nosuffix must-suffix)
+;;   "Try to ensure that custom key bindings always have priority."
+;;   (unless (eq (caar minor-mode-map-alist) 'my/keys-mode)
+;;     (let ((my/keys-mode-map (assq 'my/keys-mode minor-mode-map-alist)))
+;;       (assq-delete-all 'my/keys-mode minor-mode-map-alist)
+;;       (add-to-list 'minor-mode-map-alist my/keys-mode-map))))
 
-(advice-add 'load :after #'my/prioritize-keys)
+;; (advice-add 'load :after #'my/prioritize-keys)
 
 ;;(global-set-key (kbd "C-c t") #'make-temp-buffer)
 ;;(define-key my/keys-mode-prefix-map (kbd "r b") #'revert-buffer)
@@ -1012,27 +1030,59 @@ in whole buffer.  With neither, delete comments on current line."
   ;;(define-key whole-line-or-region-local-mode-map [remap uncomment-region] nil)
   )
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; undo tree
-(use-package undo-tree
-  :diminish undo-tree-mode
-  :defer t
-  :init
-  (progn
-    (defalias 'redo 'undo-tree-redo)
-    (defalias 'undo 'undo-tree-undo)
-    (global-undo-tree-mode 1))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; vundo / undo-tree / winner
+;; vundo config from :
+;; https://www.reddit.com/r/emacs/comments/txwwfi/vundo_is_great_visual_undotree_for_emacs28/
+(use-package vundo
+  :commands (vundo)
+
   :config
-  (progn
-    (setq undo-tree-visualizer-timestamps t
-          undo-tree-visualizer-diff t
-          undo-tree-enable-undo-in-region t
-          ;;undo-tree-auto-save-history t
-          )
-    (let ((undo-dir (concat my/emacs-tmpdir "/undo-tree/")))
-      (setq undo-tree-history-directory-alist
-            `(("." . ,undo-dir)))
-      (unless (file-exists-p undo-dir)
-        (make-directory undo-dir t)))))
+  ;; Take less on-screen space.
+  (setq vundo-compact-display t)
+
+  ;; Better contrasting highlight.
+  (custom-set-faces
+    '(vundo-node ((t (:foreground "#808080"))))
+    '(vundo-stem ((t (:foreground "#808080"))))
+    '(vundo-highlight ((t (:foreground "#FFFF00")))))
+
+  ;; Use `HJKL` VIM-like motion, also Home/End to jump around.
+  ;; (define-key vundo-mode-map (kbd "l") #'vundo-forward)
+  (define-key vundo-mode-map (kbd "<right>") #'vundo-forward)
+  ;; (define-key vundo-mode-map (kbd "h") #'vundo-backward)
+  (define-key vundo-mode-map (kbd "<left>") #'vundo-backward)
+  ;; (define-key vundo-mode-map (kbd "j") #'vundo-next)
+  (define-key vundo-mode-map (kbd "<down>") #'vundo-next)
+  ;; (define-key vundo-mode-map (kbd "k") #'vundo-previous)
+  (define-key vundo-mode-map (kbd "<up>") #'vundo-previous)
+  (define-key vundo-mode-map (kbd "<home>") #'vundo-stem-root)
+  (define-key vundo-mode-map (kbd "<end>") #'vundo-stem-end)
+  (define-key vundo-mode-map (kbd "q") #'vundo-quit)
+  (define-key vundo-mode-map (kbd "C-g") #'vundo-quit)
+  (define-key vundo-mode-map (kbd "RET") #'vundo-confirm))
+
+(global-set-key (kbd "C-x u") 'vundo)
+
+;; (use-package undo-tree
+;;   :diminish undo-tree-mode
+;;   :defer t
+;;   :init
+;;   (progn
+;;     (defalias 'redo 'undo-tree-redo)
+;;     (defalias 'undo 'undo-tree-undo)
+;;     (global-undo-tree-mode 1))
+;;   :config
+;;   (progn
+;;     (setq undo-tree-visualizer-timestamps t
+;;           undo-tree-visualizer-diff t
+;;           undo-tree-enable-undo-in-region t
+;;           ;;undo-tree-auto-save-history t
+;;           )
+;;     (let ((undo-dir (concat my/emacs-tmpdir "/undo-tree/")))
+;;       (setq undo-tree-history-directory-alist
+;;             `(("." . ,undo-dir)))
+;;       (unless (file-exists-p undo-dir)
+;;         (make-directory undo-dir t)))))
 
 ;; useful to come back to working window after a buffer has popped up
 ;; C-c <left> to come back
@@ -1356,7 +1406,15 @@ in whole buffer.  With neither, delete comments on current line."
         comment-auto-fill-only-comments nil
         comment-style 'extra-line))
 
-(add-hook 'c-mode-hook 'my/c-style)
+(use-package cc-mode
+    :ensure nil
+    :config
+    (add-hook 'c-mode-common-hook
+              (lambda ()
+                ;;(when (derived-mode-p 'c-mode 'c++-mode 'java-mode 'asm-mode)
+                (when (derived-mode-p 'c-mode)
+                  (ggtags-mode 1))))
+    (add-hook 'c-mode-hook 'my/c-style))
 
 ;;;;;;;;;;;;; linux kernel style
 (defun c-lineup-arglist-tabs-only (ignored)
@@ -2194,7 +2252,7 @@ The output will appear in the buffer *PHP*."
         ;;lsp-enable-on-type-formatting      nil
         lsp-enable-snippet                 nil
         lsp-enable-symbol-highlighting     t
-        lsp-lens-enable                    t
+        lsp-lens-enable                    nil
         lsp-headerline-breadcrumb-enable   t
         lsp-enable-indentation             nil
         lsp-enable-on-type-formatting      nil
@@ -2203,6 +2261,8 @@ The output will appear in the buffer *PHP*."
         lsp-modeline-code-actions-enable   t
         lsp-modeline-code-actions-segments '(count icon name)
         lsp-signature-render-documentation t)
+  ;;(define-key lsp-mode-map (kbd "<mouse-3>") nil)
+  ;;(define-key lsp-mode-map (kbd "C-S-<mouse-3>") 'lsp-mouse-click)
   :hook
   ((sh-mode  . lsp-deferred)
    ;;(c-mode-common . lsp-deferred)
@@ -2213,9 +2273,9 @@ The output will appear in the buffer *PHP*."
   ;;:diminish
   :config
   (setq lsp-ui-doc-show-with-cursor        t
-        lsp-ui-doc-show-with-mouse         nil
+        lsp-ui-doc-show-with-mouse         nil    ; breaks isearch
 
-        lsp-ui-sideline-enable             nil
+        lsp-ui-sideline-enable             nil    ; too messy
         lsp-ui-sideline-show-hover         t
         lsp-ui-sideline-show-symbol        t
         lsp-ui-sideline-show-code-actions  t
@@ -2225,7 +2285,9 @@ The output will appear in the buffer *PHP*."
         lsp-ui-doc-max-width               80
         lsp-ui-doc-max-height              20
         lsp-ui-doc-include-signature       t      ; type signature in doc
-        lsp-ui-doc-position                'top)
+        lsp-ui-doc-enhanced-markdown       t      ; looks b0rken (lists...)
+        lsp-ui-doc-position                'top   ; top/bottom/at-point
+        lsp-ui-doc-alignment               'window)
 
   :commands
   (lsp-ui-mode)
