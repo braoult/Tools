@@ -98,13 +98,16 @@ _var_del PATH /snap/bin
 # enable core file
 ulimit -Sc 102400                                 # in 1024 bytes, 100Mb
 
-# ... and set PAGER to less (for man(1) and others)
+# Set pager: "less" is prefered over "more".
 if hash less 2>/dev/null; then
     export PAGER=less
     # do not clear screen after "less", exit immediately if one page only
-    export LESS="--quit-if-one-screen --no-init"
-    # ... and just alias more... to less ;-)
+    export LESS="--quit-if-one-screen --quit-at-eof --no-init"
     alias more=less
+else
+    export MORE="--exit-on-eof --silent"
+    export PAGER=more
+    alias less=more
 fi
 
 # no output split for dc and bc / make bc silent
