@@ -65,13 +65,11 @@ _vardir() {
     # shellcheck disable=SC2139
     alias "$_a"="$_x"
 }
-#_vardir AOC    aoc    +  ~/dev/advent-of-code     # Advent of code
-_vardir WCHESS wchess -  ~/dev/www/crd/chess      # raoult.com chess
-_vardir CHESS  chess  +  ~/dev/brchess            # brchess
-_vardir TOOLS  tools  -  ~/dev/tools              # tools
-_vardir BRLIB  brlib  -  ~/dev/brlib              # brlib
-#_vardir EUD    eud    +  ~/dev/eudyptula          # eudyptula
-_vardir DEV    dev    -  ~/dev                    # dev
+_vardir CHESS   chess   +  ~/dev/brchess          # brchess
+_vardir ENGINES engines -  ~/dev/chess-engines    # chess engines
+_vardir TOOLS   tools   -  ~/dev/tools            # tools
+_vardir BRLIB   brlib   -  ~/dev/brlib            # brlib
+_vardir DEV     dev     -  ~/dev                  # dev
 
 # Indent style for emacs
 # Local Variables:
