@@ -15,4 +15,5 @@
 # This imply a duplicate "$HOME/bin" in PATH, as we do everything in .bashrc.$user.
 # Having this ~/.bash_profile will avoid the execution of ~/.profile
 
+# shellcheck disable=SC1091
 [ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"

@@ -15,6 +15,7 @@
 ;; (require 'use-package)
 (package-initialize)
 (setq use-package-always-ensure t)
+;; (setq package-check-signature nil)
 (use-package delight :ensure t)
 
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/"))
@@ -454,8 +455,17 @@ Return new LIST-VAR value."
 
 (global-set-key (kbd "C-h c") 'describe-char)
 (global-set-key (kbd "C-x 4 C-b") 'switch-to-buffer-other-window)
-(global-unset-key [mode-line mouse-3])            ; so disturbing mouse-3 there !
+(global-unset-key [mode-line mouse-3])            ; disabble annoying modeline mouse-3
 
+;; compilation buffer in different frame
+;; https://emacs.stackexchange.com/a/21393/23591
+;; (push "*compilation*" special-display-buffer-names)
+;; https://emacs.stackexchange.com/a/75534/23591
+(add-to-list 'display-buffer-alist
+             (cons (rx string-start "*compilation*" string-end)
+                   (cons 'display-buffer-reuse-window
+                         '((reusable-frames . visible)
+                           (inhibit-switch-frames . nil)))))
 
 ;; next example maps C-x C-x to the same as C-c
 ;; (global-set-key (kbd "C-x C-x") (lookup-key global-map (kbd "C-c")))
@@ -498,7 +508,10 @@ Return new LIST-VAR value."
 (setq display-time-24hr-format t)                 ; time format
 (display-time-mode 0)                             ; disable time in the mode-line
 
-(defalias 'yes-or-no-p 'y-or-n-p)                 ; just 'y' or 'n' instead of yes/no
+(if (< emacs-major-version 29)                    ; just 'y' or 'n' instead of yes/no
+    (defalias 'yes-or-no-p 'y-or-n-p)
+  (setopt use-short-answers t))
+(setq duplicate-line-final-position -1)           ; point on last new line
 
 (mouse-avoidance-mode 'exile)                     ; Avoid collision of mouse with point
 
@@ -677,6 +690,7 @@ point reaches the beginning or end of the buffer, stop there."
 
 (global-set-key (kbd "M-u") 'my/upcase-word)
 (global-set-key (kbd "M-l") 'my/downcase-word)
+(global-set-key (kbd "H-y") 'duplicate-dwim)
 
 ;; rewrite comment-kill to avoid filling kill-ring
 ;; From: https://emacs.stackexchange.com/a/5445/23591
@@ -768,7 +782,7 @@ in whole buffer.  With neither, delete comments on current line."
   "Switch the buffers between the two last frames."
   (interactive)
   (let ((this-frame-buffer nil)
-	      (other-frame-buffer nil))
+        (other-frame-buffer nil))
     (setq this-frame-buffer (car (frame-parameter nil 'buffer-list)))
     (other-frame 1)
     (setq other-frame-buffer (car (frame-parameter nil 'buffer-list)))
@@ -931,6 +945,7 @@ in whole buffer.  With neither, delete comments on current line."
   (require 'helm-projectile)
   ;; (require 'tramp)
   (setq
+
    helm-candidate-number-limit 100
    ;; From https://gist.github.com/antifuchs/9238468
    helm-split-window-inside-p t                   ; open helm buffer in current window
@@ -952,6 +967,8 @@ in whole buffer.  With neither, delete comments on current line."
    helm-scroll-amount 8                           ; scroll 8 lines other window M-<NEXT>
 
    helm-ff-file-name-history-use-recentf t
+   helm-move-to-line-cycle-in-source nil
+   ;; helm-ff-auto-update-initial-value nil
    helm-echo-input-in-header-line t)              ; ??
   ;;)
   (helm-mode)
@@ -976,10 +993,19 @@ in whole buffer.  With neither, delete comments on current line."
    ("<tab>" . helm-execute-persistent-action)
    ("C-i" . helm-execute-persistent-action)       ; make TAB works in terminal
    ("C-z" . helm-select-action)                   ; list actions using C-z
-
-   ;; bookmarks
-
-   ))
+   )
+   ;;("<left>" . helm-previous-source)
+   ;;("<right>" . helm-next-source)
+   ;;:map helm-imenu-map
+   ;;("<left>" . helm-previous-source)
+   ;;("<right>" . helm-next-source)
+   ;;:map helm-find-files-map
+   ;;("<left>" . helm-previous-source)
+   ;;("<right>" . helm-next-source))
+  :bind*
+  (:map helm-find-files-map
+   ("<left>" . helm-previous-source)
+   ("<right>" . helm-next-source)))
 
 (use-package helm-swoop
   :bind
@@ -1057,7 +1083,7 @@ in whole buffer.  With neither, delete comments on current line."
   (define-key vundo-mode-map (kbd "<up>") #'vundo-previous)
   (define-key vundo-mode-map (kbd "<home>") #'vundo-stem-root)
   (define-key vundo-mode-map (kbd "<end>") #'vundo-stem-end)
-  (define-key vundo-mode-map (kbd "q") #'vundo-quit)
+  (define-key vundo-mode-map (kbd "q") #'vundo-confirm)
   (define-key vundo-mode-map (kbd "C-g") #'vundo-quit)
   (define-key vundo-mode-map (kbd "RET") #'vundo-confirm))
 
@@ -1107,7 +1133,8 @@ in whole buffer.  With neither, delete comments on current line."
         ;; ([return] . nil)
         ("TAB" . company-complete-selection)
         ;; ([tab] . company-complete-selection)
-        ("<right>" . company-complete-common))
+        ;;("<right>" . company-complete-common)
+        )
   :config
   ;; Too slow !
   ;; (global-company-mode 1)
@@ -2227,7 +2254,7 @@ The output will appear in the buffer *PHP*."
  'sh-mode-hook
  (lambda ()
    (setq indent-tabs-mode nil
-      	 tab-width 4
+         tab-width 4
          sh-basic-offset 4
          comment-column 50
          comment-auto-fill-only-comments t
@@ -2310,7 +2337,7 @@ The output will appear in the buffer *PHP*."
   :diminish " ccls"
   :init
   (setq ccls-initialization-options
-	      '(:index (:comments 2) :completion (:detailedLabel t)))
+        '(:index (:comments 2) :completion (:detailedLabel t)))
   (setq-default flycheck-disabled-checkers '(c/c++-clang c/c++-cppcheck c/c++-gcc))
   (setq ccls-sem-highlight-method 'font-lock)
   ;; alternatively,
@@ -2409,11 +2436,22 @@ at beginning and end of lines."
       (while (re-search-forward "[ \t]+" nil t)
         (replace-match " "))
       ;; remove spaces at lines beginning
-      (goto-char (point-min))
-      (while (re-search-forward "^[ \t]+" nil t)
-        (replace-match ""))
+      ;;(goto-char (point-min))
+      ;;(while (re-search-forward "^[ \t]+" nil t)
+      ;;  (replace-match ""))
       ;; remove spaces at line start/end
-      (delete-trailing-whitespace))))
+      ;(delete-trailing-whitespace)
+      )))
+
+(defun my/align-c-array (beg end)
+  "Align array declaration on commas between BEG and END."
+  (interactive "r")
+  (save-excursion
+    (save-restriction
+      (narrow-to-region beg end)
+      (my/trim-spaces (point-min) (point-max))
+      (align-regexp (point-min) (point-max) "\\(\\s-[[:alnum:]-_]+,\\)" -1 1 t)
+      (indent-region (point-min) (point-max) nil))))
 
 (defun my/align (beg end)
   "Align columns with spaces."
